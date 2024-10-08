@@ -82,6 +82,13 @@ def filter_duplicates_with_iou(results, iou_threshold=0.5):
     return filtered_results
 
 
+def get_display_name(full_name, class_names):
+    front_name = full_name.split("-")[0]
+    if sum(1 for name in class_names.values() if name.startswith(front_name + "-")) > 1:
+        return full_name
+    return front_name
+
+
 last_time = time.time()
 
 while cap.isOpened():
@@ -107,7 +114,8 @@ while cap.isOpened():
                 for i, box in enumerate(boxes):
                     box_id = int(class_ids[i])
                     score = scores[i]
-                    class_name = class_names[box_id]  # Dapatkan nama kelas objek
+                    full_class_name = class_names[box_id]
+                    display_name = get_display_name(full_class_name, class_names)
 
                     # Hitung pps berdasarkan posisi sebelumnya
                     if box_id in previous_positions:
@@ -120,7 +128,7 @@ while cap.isOpened():
                     # Anotasi pada frame: bounding box, nama objek, confidence, dan pps
                     x1, y1, x2, y2 = map(int, box)
                     cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 5)
-                    cv2.putText(frame, f"{class_name} {pps:.2f}", (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 2, (255, 255, 255), 3)
+                    cv2.putText(frame, f"{display_name} {pps:.2f}", (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 2, (255, 255, 255), 3)
 
             # Tampilkan frame yang sudah dianotasi
             annotated_frame = cv2.resize(frame, (640, 360))
