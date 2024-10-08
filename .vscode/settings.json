@@ -1,0 +1,75 @@
+{
+    "workbench.colorTheme": "Winter is Coming (Dark Blue)",
+    "editor.fontSize": 14,
+    "window.zoomLevel": 0,
+    "editor.formatOnSave": true,
+    "[python]": {
+        "editor.defaultFormatter": "ms-python.black-formatter",
+        "editor.formatOnSave": true
+    },
+    "black-formatter.args": [
+        "--line-length=100000"
+    ],
+    "editor.autoIndent": "full",
+    "editor.cursorBlinking": "smooth",
+    "editor.cursorSmoothCaretAnimation": "on",
+    "editor.cursorStyle": "line",
+    "editor.fontFamily": "Dank Mono, Fira Code, Inconsolata",
+    "editor.fontLigatures": true,
+    "editor.formatOnPaste": true,
+    "editor.formatOnType": false,
+    "editor.letterSpacing": 0.3,
+    "editor.lineHeight": 25,
+    "editor.minimap.enabled": true,
+    "editor.multiCursorModifier": "ctrlCmd",
+    "editor.suggestSelection": "first",
+    "editor.tabCompletion": "on",
+    "editor.tabSize": 2,
+    "editor.wordWrap": "off",
+    "files.autoSave": "afterDelay",
+    "files.autoSaveDelay": 500,
+    "search.showLineNumbers": true,
+    "workbench.iconTheme": "material-icon-theme",
+    "workbench.colorCustomizations": {
+        "[Winter is Coming (Light)]": {
+            "actionBar.toggledBackground": "#eeff00"
+        }
+    },
+    "zenMode.centerLayout": false,
+    "editor.find.autoFindInSelection": "always",
+    "editor.minimap.autohide": false,
+    "workbench.preferredDarkColorTheme": "Winter is Coming (Dark Blue)",
+    "markdown.styles": [
+        "https://use.fontawesome.com/releases/v5.7.1/css/all.css"
+    ],
+    "sqltools.connections": [
+        {
+            "mysqlOptions": {
+                "authProtocol": "default",
+                "enableSsl": "Disabled"
+            },
+            "previewLimit": 50,
+            "server": "10.5.0.2",
+            "port": 3307,
+            "driver": "MySQL",
+            "name": "10.5.0.2",
+            "database": "report_ai_cctv",
+            "username": "robot",
+            "askForPassword": true
+        },
+        {
+            "mysqlOptions": {
+                "authProtocol": "default",
+                "enableSsl": "Disabled"
+            },
+            "previewLimit": 50,
+            "server": "localhost",
+            "port": 3306,
+            "driver": "MySQL",
+            "name": "10.5.0.3",
+            "database": "report_ai_cctv",
+            "username": "root",
+            "password": "robot123"
+        }
+    ]
+}

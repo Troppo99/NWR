@@ -15,21 +15,21 @@ TCL_DLL_FILE="tcl86t.dll"
 TCL_VERSION='8.6'
 TCL_MAJOR_VERSION='8'
 TCL_MINOR_VERSION='6'
-TCL_PATCH_LEVEL='8.6.14'
+TCL_PATCH_LEVEL='8.6.13'
 
 # C compiler to use for compilation.
 TCL_CC='cl.exe'
 
 # -D flags for use with the C compiler.
-TCL_DEFS='-nologo -c /D_ATL_XP_TARGETING  /DHAVE_CPUID=1 -W3 -wd4090 -wd4146 -wd4311 -wd4312 -FpC:\b\abs_17sr80_iza\croot\tk_1714770602079\work\tcl8.6.14\win\Release_AMD64_VC1929\tcl_ThreadedDynamic\  -fp:strict -O2 -GS -GL -MD -I"C:\b\abs_17sr80_iza\croot\tk_1714770602079\work\tcl8.6.14\win\..\win" -I"C:\b\abs_17sr80_iza\croot\tk_1714770602079\work\tcl8.6.14\win\..\generic"  -I"C:\b\abs_17sr80_iza\croot\tk_1714770602079\work\tcl8.6.14\win\..\libtommath"  /DTCL_TOMMATH /DMP_PREC=4 /Dinline=__inline /DHAVE_ZLIB=1 /D_CRT_SECURE_NO_DEPRECATE /D_CRT_NONSTDC_NO_DEPRECATE /DMP_FIXED_CUTOFFS /DSTDC_HEADERS /DUSE_NMAKE=1 /DHAVE_STDINT_H=1 /DHAVE_INTTYPES_H=1 /DHAVE_STDBOOL_H=1 /DTCL_THREADS=1 /DUSE_THREAD_ALLOC=1 /DNDEBUG /DTCL_CFG_OPTIMIZED /DTCL_CFG_DO64BIT   /DBUILD_tcl'
+TCL_DEFS='-nologo -c /D_ATL_XP_TARGETING  /DHAVE_CPUID=1 -W3 -wd4090 -wd4146 -wd4311 -wd4312 -FpD:\bld\tk_1699201897784\work\tcl8.6.13\win\Release_AMD64_VC1929\tcl_ThreadedDynamic\  -fp:strict -O2 -GS -GL -MD -I"D:\bld\tk_1699201897784\work\tcl8.6.13\win\..\win" -I"D:\bld\tk_1699201897784\work\tcl8.6.13\win\..\generic"  -I"D:\bld\tk_1699201897784\work\tcl8.6.13\win\..\libtommath"  /DTCL_TOMMATH /DMP_PREC=4 /Dinline=__inline /DHAVE_ZLIB=1 /D_CRT_SECURE_NO_DEPRECATE /D_CRT_NONSTDC_NO_DEPRECATE /DMP_FIXED_CUTOFFS /DSTDC_HEADERS /DUSE_NMAKE=1 /DHAVE_STDINT_H=1 /DHAVE_INTTYPES_H=1 /DHAVE_STDBOOL_H=1 /DTCL_THREADS=1 /DUSE_THREAD_ALLOC=1 /DNDEBUG /DTCL_CFG_OPTIMIZED /DTCL_CFG_DO64BIT   /DBUILD_tcl'
 
 # If TCL was built with debugging symbols, generated libraries contain
 # this string at the end of the library name (before the extension).
 TCL_DBGX=t
 
 # Default flags used in an optimized and debuggable build, respectively.
-TCL_CFLAGS_DEBUG='-nologo -c -W3 -YX -FpC:\b\abs_17sr80_iza\croot\tk_1714770602079\work\tcl8.6.14\win\Release_AMD64_VC1929\tcl_ThreadedDynamic\ -MDd'
-TCL_CFLAGS_OPTIMIZE='-nologo -c -W3 -YX -FpC:\b\abs_17sr80_iza\croot\tk_1714770602079\work\tcl8.6.14\win\Release_AMD64_VC1929\tcl_ThreadedDynamic\ -MD'
+TCL_CFLAGS_DEBUG='-nologo -c -W3 -YX -FpD:\bld\tk_1699201897784\work\tcl8.6.13\win\Release_AMD64_VC1929\tcl_ThreadedDynamic\ -MDd'
+TCL_CFLAGS_OPTIMIZE='-nologo -c -W3 -YX -FpD:\bld\tk_1699201897784\work\tcl8.6.13\win\Release_AMD64_VC1929\tcl_ThreadedDynamic\ -MD'
 
 # Default linker flags used in an optimized and debuggable build, respectively.
 TCL_LDFLAGS_DEBUG='-nologo -machine:AMD64 -debug -debugtype:cv'
@@ -42,9 +42,12 @@ TCL_SHARED_BUILD=1
 TCL_LIB_FILE='tcl86t.lib'
 
 # Flag to indicate whether shared libraries need export files.
-TCL_NEEDS_EXP_FILE=''
+TCL_NEEDS_EXP_FILE=
 
-# Deprecated. Same as TCL_UNSHARED_LIB_SUFFIX
+# String that can be evaluated to generate the part of the export file
+# name that comes after the "libxxx" (includes version number, if any,
+# extension, and anything else needed).  May depend on the variables
+# VERSION.  On most UNIX systems this is ${VERSION}.exp.
 TCL_EXPORT_FILE_SUFFIX='86t.lib'
 
 # Additional libraries to use when linking Tcl.
@@ -104,11 +107,11 @@ TCL_COMPAT_OBJS=''
 TCL_RANLIB=''
 
 # -l flag to pass to the linker to pick up the Tcl library
-TCL_LIB_FLAG='tcl86t.lib'
+TCL_LIB_FLAG=''
 
 # String to pass to linker to pick up the Tcl library from its
 # build directory.
-TCL_BUILD_LIB_SPEC='C:\b\abs_17sr80_iza\croot\tk_1714770602079\work\tcl8.6.14\win\Release_AMD64_VC1929\tcl86t.lib'
+TCL_BUILD_LIB_SPEC=''
 
 # String to pass to linker to pick up the Tcl library from its
 # installed directory.
@@ -122,7 +125,7 @@ TCL_INCLUDE_SPEC='-Id:/NWR/.conda\Library\include'
 # ("ok" means it's safe to use switches like -ltcl7.5;  "nodots" means
 # use switches like -ltcl75).  SunOS and FreeBSD require "nodots", for
 # example.
-TCL_LIB_VERSIONS_OK='nodots'
+TCL_LIB_VERSIONS_OK=''
 
 # String that can be evaluated to generate the part of a shared library
 # name that comes after the "libxxx" (includes version number, if any,
@@ -143,7 +146,7 @@ TCL_UNSHARED_LIB_SUFFIX='86t.lib'
 # different place than the directory containing the source files, this
 # points to the location of the sources, not the location where Tcl was
 # compiled.
-TCL_SRC_DIR='C:\b\abs_17sr80_iza\croot\tk_1714770602079\work\tcl8.6.14\win\..'
+TCL_SRC_DIR='D:\bld\tk_1699201897784\work\tcl8.6.13\win\..'
 
 # List of standard directories in which to look for packages during
 # "package require" commands.  Contains the "prefix" directory plus also
@@ -161,14 +164,14 @@ TCL_STUB_LIB_FLAG='tclstub86.lib'
 
 # String to pass to linker to pick up the Tcl stub library from its
 # build directory.
-TCL_BUILD_STUB_LIB_SPEC='-LC:\b\abs_17sr80_iza\croot\tk_1714770602079\work\tcl8.6.14\win\Release_AMD64_VC1929 tclstub86.lib'
+TCL_BUILD_STUB_LIB_SPEC='-LD:\bld\tk_1699201897784\work\tcl8.6.13\win\Release_AMD64_VC1929 tclstub86.lib'
 
 # String to pass to linker to pick up the Tcl stub library from its
 # installed directory.
 TCL_STUB_LIB_SPEC='-Ld:/NWR/.conda\Library\lib tclstub86.lib'
 
 # Path to the Tcl stub library in the build directory.
-TCL_BUILD_STUB_LIB_PATH='C:\b\abs_17sr80_iza\croot\tk_1714770602079\work\tcl8.6.14\win\Release_AMD64_VC1929\tclstub86.lib'
+TCL_BUILD_STUB_LIB_PATH='D:\bld\tk_1699201897784\work\tcl8.6.13\win\Release_AMD64_VC1929\tclstub86.lib'
 
 # Path to the Tcl stub library in the install directory.
 TCL_STUB_LIB_PATH='d:/NWR/.conda\Library\lib\tclstub86.lib'
@@ -176,5 +179,3 @@ TCL_STUB_LIB_PATH='d:/NWR/.conda\Library\lib\tclstub86.lib'
 # Flag, 1: we built Tcl with threads enabled, 0 we didn't
 TCL_THREADS=1
 
-# Name of the zlib library that extensions should use
-TCL_ZLIB_LIB_NAME='zdll.lib'
