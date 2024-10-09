@@ -14,7 +14,7 @@ CONFIDENCE_THRESHOLD_PERSON = 0.5
 IOU_THRESHOLD = 0.1  # Minimal overlap ratio (10%)
 TOLERANCE_SECONDS = 2  # Toleransi waktu dalam detik
 BROOM_ABSENCE_THRESHOLD = 5  # Jika sapu tidak terdeteksi overlapping border selama 5 detik
-BROOM_TOUCH_THRESHOLD = 0.00005  # Waktu minimal sentuhan sapu untuk mengubah warna border (dalam detik)
+BROOM_TOUCH_THRESHOLD = 0.00005  # ganti ke 0 untuk menghilangkan waktu overlapping
 
 # Set Resolusi Asli dan Resolusi Baru
 original_width, original_height = 1280, 720  # Resolusi asli
