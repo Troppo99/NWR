@@ -14,6 +14,7 @@ CONFIDENCE_THRESHOLD_PERSON = 0.5
 IOU_THRESHOLD = 0.1  # Minimal overlap ratio (10%)
 TOLERANCE_SECONDS = 2  # Toleransi waktu dalam detik
 BROOM_ABSENCE_THRESHOLD = 5  # Jika sapu tidak terdeteksi overlapping border selama 5 detik
+BROOM_TOUCH_THRESHOLD = 0.00005  # Waktu minimal sentuhan sapu untuk mengubah warna border (dalam detik)
 
 # Set Resolusi Asli dan Resolusi Baru
 original_width, original_height = 1280, 720  # Resolusi asli
@@ -60,13 +61,6 @@ def process_model_broom(frame):
     return results_broom
 
 
-# Fungsi untuk Memproses Deteksi Orang
-def process_model_person(frame):
-    with torch.no_grad():
-        results_person = model_person(frame, imgsz=640)  # Mengurangi ukuran input model
-    return results_person
-
-
 # Fungsi untuk Mengekstrak Keypoints Sapu
 def export_frame_broom(results, color, pairs, confidence_threshold=CONFIDENCE_THRESHOLD_BROOM):
     points = []
@@ -100,180 +94,67 @@ def export_frame_broom(results, color, pairs, confidence_threshold=CONFIDENCE_TH
     return points, coords, keypoint_positions
 
 
-# Fungsi untuk Mengekstrak Bounding Box Orang
-def export_frame_person(results, confidence_threshold=CONFIDENCE_THRESHOLD_PERSON):
-    person_boxes = []
-
-    for result in results:
-        boxes = result.boxes
-        if boxes is not None and boxes.xyxy is not None and boxes.conf is not None and boxes.cls is not None:
-            # Pastikan ada deteksi sebelum melakukan iterasi
-            if boxes.xyxy.shape[0] > 0:
-                for box, conf, cls in zip(boxes.xyxy.cpu().numpy(), boxes.conf.cpu().numpy(), boxes.cls.cpu().numpy()):
-                    if conf >= confidence_threshold and int(cls) == 0:  # Class 0 biasanya 'person'
-                        x1, y1, x2, y2 = box
-                        person_boxes.append((int(x1), int(y1), int(x2), int(y2)))
-    return person_boxes
-
-
-# Fungsi untuk Menghitung Intersection over Union (IoU)
-def compute_iou(boxA, boxB):
-    # boxA dan boxB adalah tuple (x1, y1, x2, y2)
-    xA = max(boxA[0], boxB[0])
-    yA = max(boxA[1], boxB[1])
-    xB = min(boxA[2], boxB[2])
-    yB = min(boxA[3], boxB[3])
-
-    # Hitung luas overlap
-    interWidth = max(0, xB - xA + 1)
-    interHeight = max(0, yB - yA + 1)
-    interArea = interWidth * interHeight
-
-    # Hitung luas masing-masing bounding box
-    boxAArea = (boxA[2] - boxA[0] + 1) * (boxA[3] - boxA[1] + 1)
-    boxBArea = (boxB[2] - boxB[0] + 1) * (boxB[3] - boxB[1] + 1)
-
-    # Hitung IoU
-    if (boxAArea + boxBArea - interArea) == 0:
-        return 0
-    iou = interArea / float(boxAArea + boxBArea - interArea)
-    return iou
-
-
 # Fungsi untuk Memproses Setiap Frame
 def process_frame(frame, current_time):
     global start_time, end_time, elapsed_time, broom_absence_timer_start, border_states
-    # Ubah ukuran frame menjadi resolusi baru
     frame_resized = cv2.resize(frame, (new_width, new_height))
 
-    # Deteksi Sapu
     results_broom = process_model_broom(frame_resized)
     points_broom, coords_broom, keypoint_positions = export_frame_broom(results_broom, (0, 255, 0), pairs_broom, confidence_threshold=CONFIDENCE_THRESHOLD_BROOM)
 
-    # Deteksi Orang
-    results_person = process_model_person(frame_resized)
-    person_boxes = export_frame_person(results_person, confidence_threshold=CONFIDENCE_THRESHOLD_PERSON)
+    # Inisialisasi warna border berdasarkan state sebelumnya
+    border_colors = [(0, 255, 0) if state["is_green"] else (0, 255, 255) for state in border_states.values()]
 
-    # Inisialisasi Warna untuk Setiap Border sebagai Cyan
-    border_colors = [default_border_color] * len(borders)
-
-    # Flag untuk mengetahui apakah sapu overlapping dengan border mana pun
     broom_overlapping_any_border = False
 
-    # Periksa Interaksi Sapu dan Orang dengan Border
     for border_id, border_pt in enumerate(borders_pts):
-        # Cek Sapu di Border
         sapu_overlapping = False
         for keypoints_list in keypoint_positions:
-            for idx in [2, 3, 4]:  # Keypoint indices yang relevan
+            for idx in [2, 3, 4]:  # Hanya cek keypoint 2, 3, dan 4
                 if idx < len(keypoints_list):
                     kp = keypoints_list[idx]
                     if kp is not None:
                         result = cv2.pointPolygonTest(border_pt, kp, False)
                         if result >= 0:
                             sapu_overlapping = True
-                            broom_overlapping_any_border = True  # Sapu overlapping dengan border
+                            broom_overlapping_any_border = True
                             break
             if sapu_overlapping:
                 break
 
-        # Cek Orang di Border dengan Overlap
-        orang_overlapping = False
-        for box in person_boxes:
-            # Menghitung IoU antara bounding box orang dan border bounding box
-            # Mengambil bounding box border
-            x_min, y_min, w, h = cv2.boundingRect(border_pt)
-            x_max = x_min + w
-            y_max = y_min + h
-            border_box = (x_min, y_min, x_max, y_max)
-            iou = compute_iou(box, border_box)
-            if iou >= IOU_THRESHOLD:
-                orang_overlapping = True
-                break
-
-        # Tahap Pertama: Deteksi Orang dan Sapu Bersamaan
-        if not border_states[border_id]["person_and_broom_detected"]:
-            if sapu_overlapping and orang_overlapping:
-                # Tandai bahwa orang dan sapu pernah terdeteksi bersama
-                border_states[border_id]["person_and_broom_detected"] = True
-                # Mulai mengakumulasi waktu overlapping sapu
-                if sapu_overlapping:
-                    border_states[border_id]["last_broom_overlap_time"] = current_time
-        else:
-            # Tahap Kedua: Akumulasi Waktu Overlapping Sapu
-            if sapu_overlapping:
-                if border_states[border_id]["last_broom_overlap_time"] is not None:
-                    # Akumulasi waktu overlapping sapu
-                    delta_time = current_time - border_states[border_id]["last_broom_overlap_time"]
-                    border_states[border_id]["broom_overlap_time"] += delta_time
-                # Perbarui waktu terakhir overlapping sapu
+        if sapu_overlapping:
+            if border_states[border_id]["last_broom_overlap_time"] is None:
                 border_states[border_id]["last_broom_overlap_time"] = current_time
             else:
-                # Tidak overlapping, reset waktu terakhir
-                border_states[border_id]["last_broom_overlap_time"] = None
+                delta_time = current_time - border_states[border_id]["last_broom_overlap_time"]
+                border_states[border_id]["broom_overlap_time"] += delta_time
+                border_states[border_id]["last_broom_overlap_time"] = current_time
 
-            # Cek apakah waktu overlapping sapu mencapai lebih dari 0,1 detik
-            if border_states[border_id]["broom_overlap_time"] >= 0.1 and not border_states[border_id]["is_green"]:
+            if border_states[border_id]["broom_overlap_time"] >= BROOM_TOUCH_THRESHOLD:
                 border_states[border_id]["is_green"] = True
-                border_colors[border_id] = highlight_border_color
-                # Atur start_time jika belum diatur
-                if start_time is None:
-                    start_time = current_time
-                    broom_absence_timer_start = current_time  # Start broom absence timer
-
-        # Set Warna Border jika sudah hijau
-        if border_states[border_id]["is_green"]:
-            border_colors[border_id] = highlight_border_color
+                border_colors[border_id] = (0, 255, 0)  # Ubah warna menjadi hijau
+        else:
+            border_states[border_id]["last_broom_overlap_time"] = None
 
     # Logika untuk Timer Ketidakhadiran Sapu Overlapping Border
     green_borders_exist = any(state["is_green"] for state in border_states.values())
     if green_borders_exist:
         if broom_overlapping_any_border:
-            # Reset broom absence timer jika sapu overlapping border
             broom_absence_timer_start = current_time
         else:
-            # Jika sapu tidak overlapping dengan border mana pun
             if broom_absence_timer_start is None:
                 broom_absence_timer_start = current_time
             elif (current_time - broom_absence_timer_start) >= BROOM_ABSENCE_THRESHOLD:
-                # Sapu tidak overlapping border selama threshold waktu
                 # Reset semua border dan timer
-                border_states = {idx: {"sapu_time": None, "orang_time": None, "is_green": False, "person_and_broom_detected": False, "broom_overlap_time": 0.0, "last_broom_overlap_time": None} for idx in range(len(borders))}
-                border_colors = [default_border_color] * len(borders)
+                for idx in range(len(borders)):
+                    border_states[idx] = {"is_green": False, "broom_overlap_time": 0.0, "last_broom_overlap_time": None}
+                    border_colors[idx] = (0, 255, 255)  # Kembalikan ke warna kuning
                 start_time = None
                 end_time = None
                 elapsed_time = None
                 broom_absence_timer_start = None
     else:
-        # Tidak ada border hijau, reset broom_absence_timer_start
         broom_absence_timer_start = None
-
-    # Cek apakah semua border sudah hijau
-    all_green = all(state["is_green"] for state in border_states.values())
-    if all_green and start_time is not None and end_time is None:
-        end_time = current_time
-        elapsed_time = end_time - start_time
-        # Konversi elapsed_time ke format hh:mm:ss
-        hours = int(elapsed_time // 3600)
-        minutes = int((elapsed_time % 3600) // 60)
-        seconds = int(elapsed_time % 60)
-        time_str = f"SWEEPING TIME: {hours:02d}:{minutes:02d}:{seconds:02d}"
-    elif start_time is not None and end_time is None:
-        # Timer masih berjalan
-        elapsed_time = current_time - start_time
-        # Konversi elapsed_time ke format hh:mm:ss
-        hours = int(elapsed_time // 3600)
-        minutes = int((elapsed_time % 3600) // 60)
-        seconds = int(elapsed_time % 60)
-        time_str = f"SWEEPING TIME: {hours:02d}:{minutes:02d}:{seconds:02d}"
-    elif end_time is not None:
-        # Timer sudah berhenti
-        elapsed_time = end_time - start_time
-        # Konversi elapsed_time ke format hh:mm:ss
-        hours = int(elapsed_time // 3600)
-        minutes = int((elapsed_time % 3600) // 60)
-        seconds = int(elapsed_time % 60)
-        time_str = f"SWEEPING TIME: {hours:02d}:{minutes:02d}:{seconds:02d}"
 
     # Gambar Keypoints dan Garis untuk Sapu
     if points_broom and coords_broom:
@@ -281,12 +162,6 @@ def process_frame(frame, current_time):
             cv2.line(frame_resized, x, y, color, 2)
         for point in points_broom:
             cv2.circle(frame_resized, point, 4, (0, 255, 255), -1)
-
-    # Gambar Bounding Box Orang
-    if person_boxes:
-        for box in person_boxes:
-            x1, y1, x2, y2 = box
-            cvzone.cornerRect(frame_resized, (x1, y1, x2 - x1, y2 - y1), 20, 3, 0, (255, 0, 0), (255, 0, 0))
 
     # Gambar Poligon dan Isi dengan Warna Transparan
     overlay = frame_resized.copy()
@@ -306,13 +181,11 @@ def process_frame(frame, current_time):
 
 
 if __name__ == "__main__":
-    # Muat Model Deteksi Sapu dan Orang
+    # Muat hanya Model Deteksi Sapu
     model_broom = YOLO("D:/SBHNL/Resources/Models/Pretrained/BROOM/B5_LARGE/weights/best.pt").to("cuda")  # Model Sapu
-    model_person = YOLO("yolov8n.pt").to("cuda")  # Model Orang
 
     # Verifikasi bahwa model berada di GPU
     print(f"Model Broom device: {next(model_broom.model.parameters()).device}")
-    print(f"Model Person device: {next(model_person.model.parameters()).device}")
 
     # Definisikan Sumber Video
     rtsp_url = "D:/SBHNL/Videos/AHMDL/Test/sapu_182.mp4"
