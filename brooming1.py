@@ -8,6 +8,7 @@ import time
 import torch
 import cvzone
 
+
 # Parameter Konfigurasi
 CONFIDENCE_THRESHOLD_BROOM = 0.9
 CONFIDENCE_THRESHOLD_PERSON = 0.5
@@ -53,6 +54,9 @@ end_time = None
 elapsed_time = None
 broom_absence_timer_start = None  # Timer untuk ketidakhadiran sapu overlapping border
 
+# Tambahkan variabel global baru
+first_green_time = None
+is_counting = False
 
 # Fungsi untuk Memproses Deteksi Sapu
 def process_model_broom(frame):
@@ -96,7 +100,7 @@ def export_frame_broom(results, color, pairs, confidence_threshold=CONFIDENCE_TH
 
 # Fungsi untuk Memproses Setiap Frame
 def process_frame(frame, current_time):
-    global start_time, end_time, elapsed_time, broom_absence_timer_start, border_states
+    global start_time, end_time, elapsed_time, broom_absence_timer_start, border_states, first_green_time, is_counting
     frame_resized = cv2.resize(frame, (new_width, new_height))
 
     results_broom = process_model_broom(frame_resized)
@@ -139,6 +143,10 @@ def process_frame(frame, current_time):
     # Logika untuk Timer Ketidakhadiran Sapu Overlapping Border
     green_borders_exist = any(state["is_green"] for state in border_states.values())
     if green_borders_exist:
+        if not is_counting:
+            first_green_time = current_time
+            is_counting = True
+        
         if broom_overlapping_any_border:
             broom_absence_timer_start = current_time
         else:
@@ -149,12 +157,14 @@ def process_frame(frame, current_time):
                 for idx in range(len(borders)):
                     border_states[idx] = {"is_green": False, "broom_overlap_time": 0.0, "last_broom_overlap_time": None}
                     border_colors[idx] = (0, 255, 255)  # Kembalikan ke warna kuning
-                start_time = None
-                end_time = None
-                elapsed_time = None
+                first_green_time = None
+                is_counting = False
                 broom_absence_timer_start = None
     else:
         broom_absence_timer_start = None
+        if is_counting:
+            first_green_time = None
+            is_counting = False
 
     # Gambar Keypoints dan Garis untuk Sapu
     if points_broom and coords_broom:
@@ -174,7 +184,10 @@ def process_frame(frame, current_time):
     cv2.addWeighted(overlay, alpha, frame_resized, 1 - alpha, 0, frame_resized)
 
     # Tampilkan Elapsed Time jika timer sudah dimulai
-    if start_time is not None and elapsed_time is not None:
+    if is_counting and first_green_time is not None:
+        elapsed_time = current_time - first_green_time
+        minutes, seconds = divmod(int(elapsed_time), 60)
+        time_str = f"Elapsed Time: {minutes:02d}:{seconds:02d}"
         cvzone.putTextRect(frame_resized, time_str, (10, 50), scale=1, thickness=2, offset=5)
 
     return frame_resized
