@@ -54,6 +54,9 @@ end_time = None
 elapsed_time = None
 broom_absence_timer_start = None  # Timer untuk ketidakhadiran sapu overlapping border
 
+# Variabel untuk FPS
+prev_frame_time = time.time()
+fps = 0
 # Tambahkan variabel global baru
 first_green_time = None
 is_counting = False
@@ -146,7 +149,8 @@ def process_frame(frame, current_time):
         if not is_counting:
             first_green_time = current_time
             is_counting = True
-        
+
+
         if broom_overlapping_any_border:
             broom_absence_timer_start = current_time
         else:
@@ -224,7 +228,18 @@ if __name__ == "__main__":
             continue  # Lewati frame ini
 
         current_time = time.time()
+
+        # Perhitungan FPS
+        time_diff = current_time - prev_frame_time
+        fps = 1 / time_diff
+        prev_frame_time = current_time  # Perbarui waktu sebelumnya
+
+        # Proses frame
         frame_resized = process_frame(frame, current_time)
+
+        # Tampilkan Elapsed Time dan FPS
+        cvzone.putTextRect(frame_resized, f"FPS: {int(fps)}", (10, 90), scale=1, thickness=2, offset=5)
+
         cv2.imshow("Broom and Person Detection", frame_resized)
 
         # Tekan 'n' untuk keluar
