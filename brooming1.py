@@ -8,7 +8,6 @@ import time
 import torch
 import cvzone
 
-
 # Parameter Konfigurasi
 CONFIDENCE_THRESHOLD_BROOM = 0.9
 CONFIDENCE_THRESHOLD_PERSON = 0.5
@@ -27,6 +26,7 @@ scale_y = new_height / original_height
 
 # Mendefinisikan Borders (koordinat sudah sesuai dengan resolusi 1280x720)
 borders = [[(30, 493), (114, 439), (158, 510), (64, 567)], [(114, 439), (210, 383), (261, 448), (158, 510)], [(210, 383), (308, 326), (372, 384), (261, 448)], [(308, 326), (454, 247), (533, 296), (372, 384)], [(117, 667), (64, 567), (158, 510), (222, 601)], [(222, 601), (158, 510), (261, 448), (341, 530)], [(341, 530), (261, 448), (372, 384), (465, 459)], [(465, 459), (372, 384), (533, 296), (635, 357)], [(533, 296), (632, 247), (731, 303), (635, 357)], [(731, 303), (632, 247), (713, 208), (812, 258)], [(149, 715), (117, 667), (222, 601), (312, 713)], [(312, 713), (222, 601), (341, 530), (447, 634)], [(447, 634), (341, 530), (465, 459), (580, 547)], [(580, 547), (465, 459), (635, 357), (753, 428)], [(753, 428), (635, 357), (731, 303), (841, 365)], [(841, 365), (731, 303), (812, 258), (914, 311)], [(312, 713), (447, 634), (541, 715)], [(541, 715)], [(541, 715), (447, 634), (580, 547), (714, 641), (622, 713)], [(714, 641), (580, 547), (753, 428), (877, 506)], [(877, 506), (753, 428), (841, 365), (957, 432)], [(957, 432), (841, 365), (914, 311), (1014, 370)], [(622, 713), (714, 641), (825, 712)], [(825, 712), (714, 641), (877, 506), (996, 580), (877, 712)], [(996, 580), (877, 506), (957, 432), (1061, 496)], [(1061, 496), (957, 432), (1014, 370), (1110, 429)], [(877, 712), (996, 580), (1138, 663), (1108, 714)], [(1138, 663), (996, 580), (1061, 496), (1184, 573)], [(1184, 573), (1061, 496), (1110, 429), (1221, 504)]]
+
 # Skalakan Borders sesuai dengan resolusi baru
 scaled_borders = []
 for border in borders:
@@ -47,7 +47,6 @@ borders_pts = [np.array(border, np.int32) for border in scaled_borders]
 # Struktur Data untuk Menyimpan State Border
 border_states = {idx: {"sapu_time": None, "orang_time": None, "is_green": False, "person_and_broom_detected": False, "broom_overlap_time": 0.0, "last_broom_overlap_time": None} for idx in range(len(borders))}  # Menandai deteksi bersama  # Waktu akumulasi overlapping sapu  # Waktu terakhir overlapping sapu
 
-
 # Variabel untuk Melacak Waktu
 start_time = None
 end_time = None
@@ -60,6 +59,7 @@ fps = 0
 # Tambahkan variabel global baru
 first_green_time = None
 is_counting = False
+
 
 # Fungsi untuk Memproses Deteksi Sapu
 def process_model_broom(frame):
@@ -150,7 +150,6 @@ def process_frame(frame, current_time):
             first_green_time = current_time
             is_counting = True
 
-
         if broom_overlapping_any_border:
             broom_absence_timer_start = current_time
         else:
@@ -200,12 +199,12 @@ def process_frame(frame, current_time):
 if __name__ == "__main__":
     # Muat hanya Model Deteksi Sapu
     model_broom = YOLO("D:/SBHNL/Resources/Models/Pretrained/BROOM/B5_LARGE/weights/best.pt").to("cuda")  # Model Sapu
-
+    model_broom.overrides["verbose"] = False
     # Verifikasi bahwa model berada di GPU
     print(f"Model Broom device: {next(model_broom.model.parameters()).device}")
 
     # Definisikan Sumber Video
-    rtsp_url = "D:/SBHNL/Videos/AHMDL/Test/sapu_182.mp4"
+    rtsp_url = "D:/SBHNL/Videos/AHMDL/Test/sapu_182(2).mp4"
     cap = cv2.VideoCapture(rtsp_url)
     if not cap.isOpened():
         print(f"Error: Cannot open video {rtsp_url}")
@@ -231,11 +230,20 @@ if __name__ == "__main__":
 
         # Perhitungan FPS
         time_diff = current_time - prev_frame_time
-        fps = 1 / time_diff
+        if time_diff > 0:
+            fps = 1 / time_diff
+        else:
+            fps = 0
         prev_frame_time = current_time  # Perbarui waktu sebelumnya
 
         # Proses frame
         frame_resized = process_frame(frame, current_time)
+
+        # Hitung dan Cetak Persentase Border Hijau
+        total_borders = len(borders)
+        green_borders = sum(1 for state in border_states.values() if state["is_green"])
+        percentage_green = (green_borders / total_borders) * 100
+        print(f"Persentase Border Hijau: {percentage_green:.2f}%")
 
         # Tampilkan Elapsed Time dan FPS
         cvzone.putTextRect(frame_resized, f"FPS: {int(fps)}", (10, 90), scale=1, thickness=2, offset=5)
