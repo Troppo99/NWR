@@ -7,12 +7,11 @@ import numpy as np
 import time
 import torch
 import cvzone
+import pymysql
+from datetime import datetime
 
 # Parameter Konfigurasi
 CONFIDENCE_THRESHOLD_BROOM = 0.9
-CONFIDENCE_THRESHOLD_PERSON = 0.5
-IOU_THRESHOLD = 0.1  # Minimal overlap ratio (10%)
-TOLERANCE_SECONDS = 2  # Toleransi waktu dalam detik
 BROOM_ABSENCE_THRESHOLD = 5  # Jika sapu tidak terdeteksi overlapping border selama 5 detik
 BROOM_TOUCH_THRESHOLD = 0.00005  # ganti ke 0 untuk menghilangkan waktu overlapping
 
@@ -59,6 +58,7 @@ fps = 0
 # Tambahkan variabel global baru
 first_green_time = None
 is_counting = False
+message_printed = False  # Flag baru untuk melacak apakah pesan sudah dicetak
 
 
 # Fungsi untuk Memproses Deteksi Sapu
@@ -103,7 +103,7 @@ def export_frame_broom(results, color, pairs, confidence_threshold=CONFIDENCE_TH
 
 # Fungsi untuk Memproses Setiap Frame
 def process_frame(frame, current_time):
-    global start_time, end_time, elapsed_time, broom_absence_timer_start, border_states, first_green_time, is_counting
+    global start_time, end_time, elapsed_time, broom_absence_timer_start, border_states, first_green_time, is_counting, message_printed
     frame_resized = cv2.resize(frame, (new_width, new_height))
 
     results_broom = process_model_broom(frame_resized)
@@ -196,6 +196,44 @@ def process_frame(frame, current_time):
     return frame_resized
 
 
+def server_address(host):
+    if host == "localhost":
+        user = "root"
+        password = "robot123"
+        database = "report_ai_cctv"
+        port = 3306
+    elif host == "10.5.0.2":
+        user = "robot"
+        password = "robot123"
+        database = "report_ai_cctv"
+        port = 3307
+    return user, password, database, port
+
+
+def send_to_server(host, percentage_green, elapsed_time):
+    try:
+        user, password, database, port = server_address(host)
+        connection = pymysql.connect(host=host, user=user, password=password, database=database, port=port)
+        cursor = connection.cursor()
+        table = "empbro"
+        camera_name = "10.5.0.182"
+        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        query = f"""
+        INSERT INTO {table} (cam, timestamp, percentage, elapsed_time)
+        VALUES (%s, %s, %s, %s)
+        """
+        cursor.execute(query, (camera_name, timestamp, percentage_green, elapsed_time))
+        connection.commit()
+        print(f"Data berhasil dikirim ")  # Gantikan logger dengan print
+    except pymysql.MySQLError as e:
+        print(f"Error saat mengirim data : {e}")  # Gantikan logger dengan print
+    finally:
+        if "cursor" in locals():
+            cursor.close()
+        if "connection" in locals():
+            connection.close()
+
+
 if __name__ == "__main__":
     # Muat hanya Model Deteksi Sapu
     model_broom = YOLO("D:/SBHNL/Resources/Models/Pretrained/BROOM/B5_LARGE/weights/best.pt").to("cuda")  # Model Sapu
@@ -243,10 +281,19 @@ if __name__ == "__main__":
         total_borders = len(borders)
         green_borders = sum(1 for state in border_states.values() if state["is_green"])
         percentage_green = (green_borders / total_borders) * 100
-        print(f"Persentase Border Hijau: {percentage_green:.2f}%")
 
+        if percentage_green >= 50 and not message_printed:
+            print("Ini tempat sql")
+            send_to_server("10.5.0.2", percentage_green, elapsed_time)
+            message_printed = True  # Set flag menjadi True setelah mencetak pesan
+
+        # Reset flag jika persentase turun di bawah 50%
+        if percentage_green < 50:
+            message_printed = False
+
+        cvzone.putTextRect(frame_resized, f"Persentase Border Hijau: {percentage_green:.2f}%", (10, 75), scale=1, thickness=2, offset=5)
         # Tampilkan Elapsed Time dan FPS
-        cvzone.putTextRect(frame_resized, f"FPS: {int(fps)}", (10, 90), scale=1, thickness=2, offset=5)
+        cvzone.putTextRect(frame_resized, f"FPS: {int(fps)}", (10, 100), scale=1, thickness=2, offset=5)
 
         cv2.imshow("Broom and Person Detection", frame_resized)
 
