@@ -24,7 +24,36 @@ scale_x = new_width / original_width
 scale_y = new_height / original_height
 
 # Mendefinisikan Borders (koordinat sudah sesuai dengan resolusi 1280x720)
-borders = [[(30, 493), (114, 439), (158, 510), (64, 567)], [(114, 439), (210, 383), (261, 448), (158, 510)], [(210, 383), (308, 326), (372, 384), (261, 448)], [(308, 326), (454, 247), (533, 296), (372, 384)], [(117, 667), (64, 567), (158, 510), (222, 601)], [(222, 601), (158, 510), (261, 448), (341, 530)], [(341, 530), (261, 448), (372, 384), (465, 459)], [(465, 459), (372, 384), (533, 296), (635, 357)], [(533, 296), (632, 247), (731, 303), (635, 357)], [(731, 303), (632, 247), (713, 208), (812, 258)], [(149, 715), (117, 667), (222, 601), (312, 713)], [(312, 713), (222, 601), (341, 530), (447, 634)], [(447, 634), (341, 530), (465, 459), (580, 547)], [(580, 547), (465, 459), (635, 357), (753, 428)], [(753, 428), (635, 357), (731, 303), (841, 365)], [(841, 365), (731, 303), (812, 258), (914, 311)], [(312, 713), (447, 634), (541, 715)], [(541, 715)], [(541, 715), (447, 634), (580, 547), (714, 641), (622, 713)], [(714, 641), (580, 547), (753, 428), (877, 506)], [(877, 506), (753, 428), (841, 365), (957, 432)], [(957, 432), (841, 365), (914, 311), (1014, 370)], [(622, 713), (714, 641), (825, 712)], [(825, 712), (714, 641), (877, 506), (996, 580), (877, 712)], [(996, 580), (877, 506), (957, 432), (1061, 496)], [(1061, 496), (957, 432), (1014, 370), (1110, 429)], [(877, 712), (996, 580), (1138, 663), (1108, 714)], [(1138, 663), (996, 580), (1061, 496), (1184, 573)], [(1184, 573), (1061, 496), (1110, 429), (1221, 504)]]
+borders = [
+    [(30, 493), (114, 439), (158, 510), (64, 567)],
+    [(114, 439), (210, 383), (261, 448), (158, 510)],
+    [(210, 383), (308, 326), (372, 384), (261, 448)],
+    [(308, 326), (454, 247), (533, 296), (372, 384)],
+    [(117, 667), (64, 567), (158, 510), (222, 601)],
+    [(222, 601), (158, 510), (261, 448), (341, 530)],
+    [(341, 530), (261, 448), (372, 384), (465, 459)],
+    [(465, 459), (372, 384), (533, 296), (635, 357)],
+    [(533, 296), (632, 247), (731, 303), (635, 357)],
+    [(731, 303), (632, 247), (713, 208), (812, 258)],
+    [(149, 715), (117, 667), (222, 601), (312, 713)],
+    [(312, 713), (222, 601), (341, 530), (447, 634)],
+    [(447, 634), (341, 530), (465, 459), (580, 547)],
+    [(580, 547), (465, 459), (635, 357), (753, 428)],
+    [(753, 428), (635, 357), (731, 303), (841, 365)],
+    [(841, 365), (731, 303), (812, 258), (914, 311)],
+    [(312, 713), (447, 634), (541, 715)],
+    [(541, 715), (447, 634), (580, 547), (714, 641), (622, 713)],
+    [(714, 641), (580, 547), (753, 428), (877, 506)],
+    [(877, 506), (753, 428), (841, 365), (957, 432)],
+    [(957, 432), (841, 365), (914, 311), (1014, 370)],
+    [(622, 713), (714, 641), (825, 712)],
+    [(825, 712), (714, 641), (877, 506), (996, 580), (877, 712)],
+    [(996, 580), (877, 506), (957, 432), (1061, 496)],
+    [(1061, 496), (957, 432), (1014, 370), (1110, 429)],
+    [(877, 712), (996, 580), (1138, 663), (1108, 714)],
+    [(1138, 663), (996, 580), (1061, 496), (1184, 573)],
+    [(1184, 573), (1061, 496), (1110, 429), (1221, 504)],
+]
 
 # Skalakan Borders sesuai dengan resolusi baru
 scaled_borders = []
@@ -44,7 +73,17 @@ highlight_border_color = (0, 255, 0)  # Hijau
 borders_pts = [np.array(border, np.int32) for border in scaled_borders]
 
 # Struktur Data untuk Menyimpan State Border
-border_states = {idx: {"sapu_time": None, "orang_time": None, "is_green": False, "person_and_broom_detected": False, "broom_overlap_time": 0.0, "last_broom_overlap_time": None} for idx in range(len(borders))}  # Menandai deteksi bersama  # Waktu akumulasi overlapping sapu  # Waktu terakhir overlapping sapu
+border_states = {
+    idx: {
+        "sapu_time": None,
+        "orang_time": None,
+        "is_green": False,
+        "person_and_broom_detected": False,
+        "broom_overlap_time": 0.0,
+        "last_broom_overlap_time": None,
+    }
+    for idx in range(len(borders))
+}  # Menandai deteksi bersama  # Waktu akumulasi overlapping sapu  # Waktu terakhir overlapping sapu
 
 # Variabel untuk Melacak Waktu
 start_time = None
@@ -58,7 +97,6 @@ fps = 0
 # Tambahkan variabel global baru
 first_green_time = None
 is_counting = False
-message_printed = False  # Flag baru untuk melacak apakah pesan sudah dicetak
 
 
 # Fungsi untuk Memproses Deteksi Sapu
@@ -76,11 +114,17 @@ def export_frame_broom(results, color, pairs, confidence_threshold=CONFIDENCE_TH
 
     for result in results:
         keypoints_data = result.keypoints
-        if keypoints_data is not None and keypoints_data.xy is not None and keypoints_data.conf is not None:
+        if (
+            keypoints_data is not None
+            and keypoints_data.xy is not None
+            and keypoints_data.conf is not None
+        ):
             if keypoints_data.shape[0] > 0:
                 keypoints_array = keypoints_data.xy.cpu().numpy()  # shape (n, k, 2)
                 keypoints_conf = keypoints_data.conf.cpu().numpy()  # shape (n, k)
-                for keypoints_per_object, keypoints_conf_per_object in zip(keypoints_array, keypoints_conf):
+                for keypoints_per_object, keypoints_conf_per_object in zip(
+                    keypoints_array, keypoints_conf
+                ):
                     keypoints_list = []
                     for kp, kp_conf in zip(keypoints_per_object, keypoints_conf_per_object):
                         if kp_conf >= confidence_threshold:
@@ -102,15 +146,19 @@ def export_frame_broom(results, color, pairs, confidence_threshold=CONFIDENCE_TH
 
 
 # Fungsi untuk Memproses Setiap Frame
-def process_frame(frame, current_time):
-    global start_time, end_time, elapsed_time, broom_absence_timer_start, border_states, first_green_time, is_counting, message_printed
+def process_frame(frame, current_time, percentage_green):
+    global start_time, end_time, elapsed_time, broom_absence_timer_start, border_states, first_green_time, is_counting
     frame_resized = cv2.resize(frame, (new_width, new_height))
-
+    save_image = False
     results_broom = process_model_broom(frame_resized)
-    points_broom, coords_broom, keypoint_positions = export_frame_broom(results_broom, (0, 255, 0), pairs_broom, confidence_threshold=CONFIDENCE_THRESHOLD_BROOM)
+    points_broom, coords_broom, keypoint_positions = export_frame_broom(
+        results_broom, (0, 255, 0), pairs_broom, confidence_threshold=CONFIDENCE_THRESHOLD_BROOM
+    )
 
     # Inisialisasi warna border berdasarkan state sebelumnya
-    border_colors = [(0, 255, 0) if state["is_green"] else (0, 255, 255) for state in border_states.values()]
+    border_colors = [
+        (0, 255, 0) if state["is_green"] else (0, 255, 255) for state in border_states.values()
+    ]
 
     broom_overlapping_any_border = False
 
@@ -157,8 +205,17 @@ def process_frame(frame, current_time):
                 broom_absence_timer_start = current_time
             elif (current_time - broom_absence_timer_start) >= BROOM_ABSENCE_THRESHOLD:
                 # Reset semua border dan timer
+                print("reset")
+                if percentage_green > 75:
+                    print("Green border is bigger than 75% and data is sent to server")
+                    send_to_server("10.5.0.2", percentage_green, elapsed_time)
+                    save_image = True
                 for idx in range(len(borders)):
-                    border_states[idx] = {"is_green": False, "broom_overlap_time": 0.0, "last_broom_overlap_time": None}
+                    border_states[idx] = {
+                        "is_green": False,
+                        "broom_overlap_time": 0.0,
+                        "last_broom_overlap_time": None,
+                    }
                     border_colors[idx] = (0, 255, 255)  # Kembalikan ke warna kuning
                 first_green_time = None
                 is_counting = False
@@ -193,7 +250,7 @@ def process_frame(frame, current_time):
         time_str = f"Elapsed Time: {minutes:02d}:{seconds:02d}"
         cvzone.putTextRect(frame_resized, time_str, (10, 50), scale=1, thickness=2, offset=5)
 
-    return frame_resized
+    return frame_resized, save_image
 
 
 def server_address(host):
@@ -213,7 +270,9 @@ def server_address(host):
 def send_to_server(host, percentage_green, elapsed_time):
     try:
         user, password, database, port = server_address(host)
-        connection = pymysql.connect(host=host, user=user, password=password, database=database, port=port)
+        connection = pymysql.connect(
+            host=host, user=user, password=password, database=database, port=port
+        )
         cursor = connection.cursor()
         table = "empbro"
         camera_name = "10.5.0.182"
@@ -236,7 +295,9 @@ def send_to_server(host, percentage_green, elapsed_time):
 
 if __name__ == "__main__":
     # Muat hanya Model Deteksi Sapu
-    model_broom = YOLO("D:/SBHNL/Resources/Models/Pretrained/BROOM/B5_LARGE/weights/best.pt").to("cuda")  # Model Sapu
+    model_broom = YOLO("D:/SBHNL/Resources/Models/Pretrained/BROOM/B5_LARGE/weights/best.pt").to(
+        "cuda"
+    )  # Model Sapu
     model_broom.overrides["verbose"] = False
     # Verifikasi bahwa model berada di GPU
     print(f"Model Broom device: {next(model_broom.model.parameters()).device}")
@@ -249,7 +310,12 @@ if __name__ == "__main__":
         exit()
 
     # Set Resolusi yang Diinginkan
-    pairs_broom = [(0, 1), (1, 2), (2, 3), (2, 4)]  # Definisikan pasangan keypoint untuk menggambar garis
+    pairs_broom = [
+        (0, 1),
+        (1, 2),
+        (2, 3),
+        (2, 4),
+    ]  # Definisikan pasangan keypoint untuk menggambar garis
 
     frame_count = 0
     process_every_n_frames = 2  # Proses setiap 2 frame
@@ -274,27 +340,28 @@ if __name__ == "__main__":
             fps = 0
         prev_frame_time = current_time  # Perbarui waktu sebelumnya
 
-        # Proses frame
-        frame_resized = process_frame(frame, current_time)
-
         # Hitung dan Cetak Persentase Border Hijau
         total_borders = len(borders)
         green_borders = sum(1 for state in border_states.values() if state["is_green"])
         percentage_green = (green_borders / total_borders) * 100
 
-        if percentage_green >= 50 and not message_printed:
-            print("Ini tempat sql")
-            send_to_server("10.5.0.2", percentage_green, elapsed_time)
-            message_printed = True  # Set flag menjadi True setelah mencetak pesan
+        # Proses frame
+        frame_resized, save_image = process_frame(frame, current_time, percentage_green)
 
-        # Reset flag jika persentase turun di bawah 50%
-        if percentage_green < 50:
-            message_printed = False
-
-        cvzone.putTextRect(frame_resized, f"Persentase Border Hijau: {percentage_green:.2f}%", (10, 75), scale=1, thickness=2, offset=5)
+        cvzone.putTextRect(
+            frame_resized,
+            f"Persentase Border Hijau: {percentage_green:.2f}%",
+            (10, 75),
+            scale=1,
+            thickness=2,
+            offset=5,
+        )
         # Tampilkan Elapsed Time dan FPS
-        cvzone.putTextRect(frame_resized, f"FPS: {int(fps)}", (10, 100), scale=1, thickness=2, offset=5)
-
+        cvzone.putTextRect(
+            frame_resized, f"FPS: {int(fps)}", (10, 100), scale=1, thickness=2, offset=5
+        )
+        if save_image:
+            cv2.imwrite("ini_gambar.jpg", frame_resized)
         cv2.imshow("Broom and Person Detection", frame_resized)
 
         # Tekan 'n' untuk keluar
