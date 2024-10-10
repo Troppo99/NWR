@@ -232,7 +232,7 @@ def process_frame(frame, current_time, percentage_green):
                     cvzone.putTextRect(
                         frame_resized, f"FPS: {int(fps)}", (10, 100), scale=1, thickness=2, offset=5
                     )
-                    image_path = "main/images/green_borders_image.jpg"
+                    image_path = "main/images/green_borders_image_182.jpg"
                     cv2.imwrite(image_path, frame_resized)
                     send_to_server("10.5.0.2", percentage_green, elapsed_time, image_path)
 
@@ -336,6 +336,7 @@ if __name__ == "__main__":
 
     # Definisikan Sumber Video
     rtsp_url = "D:/SBHNL/Videos/AHMDL/Test/sapu_182(2).mp4"
+    # rtsp_url = "rtsp://admin:oracle2015@10.5.0.182:554/Streaming/Channels/1"
     cap = cv2.VideoCapture(rtsp_url)
     if not cap.isOpened():
         print(f"Error: Cannot open video {rtsp_url}")

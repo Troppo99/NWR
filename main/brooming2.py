@@ -223,7 +223,7 @@ def process_frame(frame, current_time, percentage_green):
                     cvzone.putTextRect(
                         frame_resized, f"FPS: {int(fps)}", (10, 100), scale=1, thickness=2, offset=5
                     )
-                    image_path = "main/images/green_borders_image.jpg"
+                    image_path = "main/images/green_borders_image_170.jpg"
                     cv2.imwrite(image_path, frame_resized)
                     send_to_server("10.5.0.2", percentage_green, elapsed_time, image_path)
 
@@ -293,7 +293,7 @@ def send_to_server(host, percentage_green, elapsed_time, image_path):
         )
         cursor = connection.cursor()
         table = "empbro"
-        camera_name = "10.5.0.182"
+        camera_name = "10.5.0.170"
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
         # Membaca file gambar dalam bentuk biner
