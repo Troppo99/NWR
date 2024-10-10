@@ -208,8 +208,9 @@ def process_frame(frame, current_time, percentage_green):
                 if percentage_green >= 75:
                     # Simpan gambar sebelum reset terjadi
                     print("Green border is bigger than 75% and data is sent to server")
-                    send_to_server("10.5.0.2", percentage_green, elapsed_time)
                     # Pastikan gambar yang disimpan memiliki elemen border warna dan informasi tambahan
+                    if first_green_time is not None:
+                        elapsed_time = current_time - first_green_time  # Update elapsed_time sebelum dikirim
                     overlay = frame_resized.copy()
                     alpha = 0.5  # Faktor Transparansi
                     for border_pt, color in zip(borders_pts, border_colors):
@@ -231,7 +232,9 @@ def process_frame(frame, current_time, percentage_green):
                     cvzone.putTextRect(
                         frame_resized, f"FPS: {int(fps)}", (10, 100), scale=1, thickness=2, offset=5
                     )
-                    cv2.imwrite("green_borders_image.jpg", frame_resized)
+                    image_path = "green_borders_image.jpg"
+                    cv2.imwrite(image_path, frame_resized)
+                    send_to_server("10.5.0.2", percentage_green, elapsed_time, image_path)
 
                 # Reset semua border menjadi kuning
                 for idx in range(len(borders)):
@@ -291,7 +294,7 @@ def server_address(host):
     return user, password, database, port
 
 
-def send_to_server(host, percentage_green, elapsed_time):
+def send_to_server(host, percentage_green, elapsed_time, image_path):
     try:
         user, password, database, port = server_address(host)
         connection = pymysql.connect(
@@ -301,11 +304,16 @@ def send_to_server(host, percentage_green, elapsed_time):
         table = "empbro"
         camera_name = "10.5.0.182"
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+        # Membaca file gambar dalam bentuk biner
+        with open(image_path, "rb") as file:
+            binary_image = file.read()
+
         query = f"""
-        INSERT INTO {table} (cam, timestamp, percentage, elapsed_time)
-        VALUES (%s, %s, %s, %s)
+        INSERT INTO {table} (cam, timestamp, percentage, elapsed_time, image)
+        VALUES (%s, %s, %s, %s, %s)
         """
-        cursor.execute(query, (camera_name, timestamp, percentage_green, elapsed_time))
+        cursor.execute(query, (camera_name, timestamp, percentage_green, elapsed_time, binary_image))
         connection.commit()
         print(f"Data berhasil dikirim ")  # Gantikan logger dengan print
     except pymysql.MySQLError as e:
