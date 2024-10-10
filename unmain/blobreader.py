@@ -61,4 +61,5 @@ def get_image_from_database(host, table, record_id):
 
 
 # Panggil fungsi untuk mengambil gambar dari database
-get_image_from_database("10.5.0.2", "empbro", 102)
+id = input("Masukkan ID: ")
+get_image_from_database("10.5.0.2", "empbro", id)
