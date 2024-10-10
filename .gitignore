@@ -1,3 +1,4 @@
 .conda/*
 .vscode/*
 .draft.py
+main/images/*
