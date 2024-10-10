@@ -149,7 +149,6 @@ def export_frame_broom(results, color, pairs, confidence_threshold=CONFIDENCE_TH
 def process_frame(frame, current_time, percentage_green):
     global start_time, end_time, elapsed_time, broom_absence_timer_start, border_states, first_green_time, is_counting
     frame_resized = cv2.resize(frame, (new_width, new_height))
-    save_image = False
     results_broom = process_model_broom(frame_resized)
     points_broom, coords_broom, keypoint_positions = export_frame_broom(
         results_broom, (0, 255, 0), pairs_broom, confidence_threshold=CONFIDENCE_THRESHOLD_BROOM
@@ -206,10 +205,35 @@ def process_frame(frame, current_time, percentage_green):
             elif (current_time - broom_absence_timer_start) >= BROOM_ABSENCE_THRESHOLD:
                 # Reset semua border dan timer
                 print("reset")
-                if percentage_green > 75:
+                if percentage_green >= 75:
+                    # Simpan gambar sebelum reset terjadi
                     print("Green border is bigger than 75% and data is sent to server")
                     send_to_server("10.5.0.2", percentage_green, elapsed_time)
-                    save_image = True
+                    # Pastikan gambar yang disimpan memiliki elemen border warna dan informasi tambahan
+                    overlay = frame_resized.copy()
+                    alpha = 0.5  # Faktor Transparansi
+                    for border_pt, color in zip(borders_pts, border_colors):
+                        cv2.fillPoly(overlay, pts=[border_pt], color=color)
+                    cv2.addWeighted(overlay, alpha, frame_resized, 1 - alpha, 0, frame_resized)
+                    minutes, seconds = divmod(int(elapsed_time), 60)
+                    time_str = f"Elapsed Time: {minutes:02d}:{seconds:02d}"
+                    cvzone.putTextRect(
+                        frame_resized, time_str, (10, 50), scale=1, thickness=2, offset=5
+                    )
+                    cvzone.putTextRect(
+                        frame_resized,
+                        f"Persentase Border Hijau: {percentage_green:.2f}%",
+                        (10, 75),
+                        scale=1,
+                        thickness=2,
+                        offset=5,
+                    )
+                    cvzone.putTextRect(
+                        frame_resized, f"FPS: {int(fps)}", (10, 100), scale=1, thickness=2, offset=5
+                    )
+                    cv2.imwrite("green_borders_image.jpg", frame_resized)
+
+                # Reset semua border menjadi kuning
                 for idx in range(len(borders)):
                     border_states[idx] = {
                         "is_green": False,
@@ -250,7 +274,7 @@ def process_frame(frame, current_time, percentage_green):
         time_str = f"Elapsed Time: {minutes:02d}:{seconds:02d}"
         cvzone.putTextRect(frame_resized, time_str, (10, 50), scale=1, thickness=2, offset=5)
 
-    return frame_resized, save_image
+    return frame_resized
 
 
 def server_address(host):
@@ -346,7 +370,7 @@ if __name__ == "__main__":
         percentage_green = (green_borders / total_borders) * 100
 
         # Proses frame
-        frame_resized, save_image = process_frame(frame, current_time, percentage_green)
+        frame_resized = process_frame(frame, current_time, percentage_green)
 
         cvzone.putTextRect(
             frame_resized,
@@ -360,8 +384,6 @@ if __name__ == "__main__":
         cvzone.putTextRect(
             frame_resized, f"FPS: {int(fps)}", (10, 100), scale=1, thickness=2, offset=5
         )
-        if save_image:
-            cv2.imwrite("ini_gambar.jpg", frame_resized)
         cv2.imshow("Broom and Person Detection", frame_resized)
 
         # Tekan 'n' untuk keluar
