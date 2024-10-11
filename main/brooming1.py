@@ -12,8 +12,9 @@ from datetime import datetime
 
 # Parameter Konfigurasi
 CONFIDENCE_THRESHOLD_BROOM = 0.9
-BROOM_ABSENCE_THRESHOLD = 5  # Jika sapu tidak terdeteksi overlapping border selama 5 detik
-BROOM_TOUCH_THRESHOLD = 0.00005  # ganti ke 0 untuk menghilangkan waktu overlapping
+BROOM_ABSENCE_THRESHOLD = 10  # Jika sapu tidak terdeteksi overlapping border selama 5 detik
+BROOM_TOUCH_THRESHOLD = 0  # ganti ke 0 untuk menghilangkan waktu overlapping
+PERCENTAGE_GREEN_THRESHOLD = 50
 
 # Set Resolusi Asli dan Resolusi Baru
 original_width, original_height = 1280, 720  # Resolusi asli
@@ -205,9 +206,9 @@ def process_frame(frame, current_time, percentage_green):
             elif (current_time - broom_absence_timer_start) >= BROOM_ABSENCE_THRESHOLD:
                 # Reset semua border dan timer
                 print("reset")
-                if percentage_green >= 75:
+                if percentage_green >= PERCENTAGE_GREEN_THRESHOLD:
                     # Simpan gambar sebelum reset terjadi
-                    print("Green border is bigger than 75% and data is sent to server")
+                    print(f"Green border is bigger than {PERCENTAGE_GREEN_THRESHOLD}% and data is sent to server")
                     # Pastikan gambar yang disimpan memiliki elemen border warna dan informasi tambahan
                     if first_green_time is not None:
                         elapsed_time = current_time - first_green_time  # Update elapsed_time sebelum dikirim
@@ -335,8 +336,8 @@ if __name__ == "__main__":
     print(f"Model Broom device: {next(model_broom.model.parameters()).device}")
 
     # Definisikan Sumber Video
-    rtsp_url = "D:/SBHNL/Videos/AHMDL/Test/sapu_182(2).mp4"
-    # rtsp_url = "rtsp://admin:oracle2015@10.5.0.182:554/Streaming/Channels/1"
+    # rtsp_url = "D:/SBHNL/Videos/AHMDL/Test/sapu_182(2).mp4"
+    rtsp_url = "rtsp://admin:oracle2015@10.5.0.182:554/Streaming/Channels/1"
     cap = cv2.VideoCapture(rtsp_url)
     if not cap.isOpened():
         print(f"Error: Cannot open video {rtsp_url}")

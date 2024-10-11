@@ -12,7 +12,7 @@ from datetime import datetime
 
 # Parameter Konfigurasi
 CONFIDENCE_THRESHOLD_BROOM = 0.9
-BROOM_ABSENCE_THRESHOLD = 5  # Jika sapu tidak terdeteksi overlapping border selama 5 detik
+BROOM_ABSENCE_THRESHOLD = 30  # Jika sapu tidak terdeteksi overlapping border selama 5 detik
 BROOM_TOUCH_THRESHOLD = 0.00005  # ganti ke 0 untuk menghilangkan waktu overlapping
 
 # Set Resolusi Asli dan Resolusi Baru

@@ -12,7 +12,11 @@ for item in os.listdir(directory):
             n += 1
             with open(data_yaml_path, "r") as file:
                 data = yaml.safe_load(file)
-                names = data["names"]
-                print(f"{n}. {item}:\n{names} : <<{len(names)}>>")
+                names = data.get("names", [])
+                modified_names = [name.replace("-", " ") for name in names]
+                data["names"] = modified_names
+            with open(data_yaml_path, "w") as file:
+                yaml.safe_dump(data, file, sort_keys=False, allow_unicode=True)
+            print(f"{n}. {item}:\n{modified_names} : <<{len(modified_names)}>>")
         else:
             print(f"data.yaml TIDAK ditemukan di folder {item}")
