@@ -8,7 +8,7 @@ import time
 import torch
 import cvzone
 import pymysql
-from datetime import datetime
+from datetime import datetime, timedelta
 
 # Parameter Konfigurasi
 CONFIDENCE_THRESHOLD_BROOM = 0.9
@@ -319,17 +319,32 @@ def send_to_server(host, percentage_green, elapsed_time, image_path):
         cursor = connection.cursor()
         table = "empbro"
         camera_name = "10.5.0.161"
-        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        timestamp_done = datetime.now()  # Keep as datetime object
+        timestamp_start = timestamp_done - timedelta(seconds=elapsed_time)
 
-        # Membaca file gambar dalam bentuk biner
+        # Format timestamps for database insertion
+        timestamp_done_str = timestamp_done.strftime("%Y-%m-%d %H:%M:%S")
+        timestamp_start_str = timestamp_start.strftime("%Y-%m-%d %H:%M:%S")
+
+        # Read the image file in binary mode
         with open(image_path, "rb") as file:
             binary_image = file.read()
 
         query = f"""
-        INSERT INTO {table} (cam, timestamp, percentage, elapsed_time, image)
-        VALUES (%s, %s, %s, %s, %s)
+        INSERT INTO {table} (cam, timestamp_start, timestamp_done, elapsed_time, percentage, image_done)
+        VALUES (%s, %s, %s, %s, %s, %s)
         """
-        cursor.execute(query, (camera_name, timestamp, percentage_green, elapsed_time, binary_image))
+        cursor.execute(
+            query,
+            (
+                camera_name,
+                timestamp_start_str,
+                timestamp_done_str,
+                elapsed_time,
+                percentage_green,
+                binary_image,
+            ),
+        )
         connection.commit()
         print(f"Data berhasil dikirim ")  # Gantikan logger dengan print
     except pymysql.MySQLError as e:
