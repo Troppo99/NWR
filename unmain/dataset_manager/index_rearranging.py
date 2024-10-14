@@ -108,8 +108,8 @@ def process_dataset(dataset_path):
     with open(data_yaml_path, "w") as file:
         yaml.safe_dump(data, file, sort_keys=False, allow_unicode=True)
     print(f"data.yaml diperbarui di folder {dataset_path}")
-    # Memperbarui label dalam folder train/labels dan valid/labels
-    for split in ["train", "valid"]:
+    # Memperbarui label dalam folder train/labels, valid/labels, dan test/labels
+    for split in ["train", "valid", "test"]:
         labels_dir = os.path.join(dataset_path, split, "labels")
         if os.path.isdir(labels_dir):
             update_labels(labels_dir, index_mapping)
