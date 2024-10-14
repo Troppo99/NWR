@@ -1,7 +1,10 @@
+import os
+
+os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
 from ultralytics import YOLO
 
 if __name__ == "__main__":
-    model = YOLO("yolov11l.pt")
+    model = YOLO("yolo11l.pt")
     model.train(
         data="D:/SBHNL/Images/BSML/Datasets/Finishing/finishing_united/data.yaml",
         epochs=50,
@@ -11,5 +14,5 @@ if __name__ == "__main__":
         device="cuda",
         batch=16,
         resume=False,
-        fp16=True,
+        amp=True,  # Use 'amp' instead of 'fp16' to enable mixed-precision training
     )
