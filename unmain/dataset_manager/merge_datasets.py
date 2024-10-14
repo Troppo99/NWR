@@ -8,11 +8,17 @@ def copy_and_flatten_datasets(source_dir, dest_dir, exclude_dirs=["backup"]):
         for subfolder in ["images", "labels"]:
             os.makedirs(os.path.join(dest_dir, split, subfolder), exist_ok=True)
 
+    # Convert destination directory to absolute path for comparison
+    dest_dir_abs = os.path.abspath(dest_dir)
+
     # Traverse the source directory
     for root, dirs, files in os.walk(source_dir):
-        # Skip excluded directories
-        if any(exclude_dir in root for exclude_dir in exclude_dirs):
-            continue
+        # Exclude destination and other specified directories from traversal
+        dirs[:] = [
+            d
+            for d in dirs
+            if os.path.abspath(os.path.join(root, d)) != dest_dir_abs and d not in exclude_dirs
+        ]
 
         # Get the last two parts of the path to identify 'images' or 'labels' folders inside 'train', 'valid', or 'test'
         parts = os.path.normpath(root).split(os.sep)[-2:]
