@@ -10,7 +10,7 @@ if __name__ == "__main__":
         epochs=50,
         imgsz=640,
         project="run/finishing",
-        name="version1",
+        name="version2",
         device="cuda",
         batch=16,
         resume=False,
