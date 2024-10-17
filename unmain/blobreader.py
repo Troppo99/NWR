@@ -27,7 +27,7 @@ def get_image_from_database(host, table, record_id):
         cursor = connection.cursor()
 
         # Query untuk mengambil data BLOB
-        query = f"SELECT image FROM {table} WHERE id = %s"
+        query = f"SELECT image_done FROM {table} WHERE id = %s"
         cursor.execute(query, (record_id,))
         result = cursor.fetchone()
 
