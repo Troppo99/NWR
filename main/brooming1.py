@@ -14,13 +14,18 @@ CONFIDENCE_THRESHOLD_BROOM = 0.9
 BROOM_ABSENCE_THRESHOLD = 10
 BROOM_TOUCH_THRESHOLD = 0
 PERCENTAGE_GREEN_THRESHOLD = 50
-
-original_width, original_height = 1280, 720
 new_width, new_height = 960, 540
-
-scale_x = new_width / original_width
-scale_y = new_height / original_height
-
+scale_x = new_width / 1280
+scale_y = new_height / 720
+scaled_borders = []
+start_time = None
+end_time = None
+elapsed_time = None
+broom_absence_timer_start = None
+prev_frame_time = time.time()
+fps = 0
+first_green_time = None
+is_counting = False
 borders = [
     [(29, 493), (107, 444), (168, 543), (81, 598)],
     [(168, 543), (182, 533), (194, 550), (297, 487), (245, 429), (138, 491)],
@@ -50,8 +55,6 @@ borders = [
     [(1011, 463), (1116, 528), (1160, 451), (1069, 396)],
     [(1116, 528), (1189, 576), (1228, 492), (1160, 451)],
 ]
-
-scaled_borders = []
 for border in borders:
     scaled_border = []
     for x, y in border:
@@ -59,12 +62,6 @@ for border in borders:
         scaled_y = int(y * scale_y)
         scaled_border.append((scaled_x, scaled_y))
     scaled_borders.append(scaled_border)
-
-default_border_color = (0, 255, 255)
-highlight_border_color = (0, 255, 0)
-
-borders_pts = [np.array(border, np.int32) for border in scaled_borders]
-
 border_states = {
     idx: {
         "sapu_time": None,
@@ -76,21 +73,14 @@ border_states = {
     }
     for idx in range(len(borders))
 }
+borders_pts = [np.array(border, np.int32) for border in scaled_borders]
 
-start_time = None
-end_time = None
-elapsed_time = None
-broom_absence_timer_start = None
-
-prev_frame_time = time.time()
-fps = 0
-first_green_time = None
-is_counting = False
 
 def process_model_broom(frame):
     with torch.no_grad():
         results_broom = model_broom(frame, imgsz=960)
     return results_broom
+
 
 def export_frame_broom(results, color, pairs, confidence_threshold=CONFIDENCE_THRESHOLD_BROOM):
     points = []
@@ -99,17 +89,11 @@ def export_frame_broom(results, color, pairs, confidence_threshold=CONFIDENCE_TH
 
     for result in results:
         keypoints_data = result.keypoints
-        if (
-            keypoints_data is not None
-            and keypoints_data.xy is not None
-            and keypoints_data.conf is not None
-        ):
+        if keypoints_data is not None and keypoints_data.xy is not None and keypoints_data.conf is not None:
             if keypoints_data.shape[0] > 0:
                 keypoints_array = keypoints_data.xy.cpu().numpy()
                 keypoints_conf = keypoints_data.conf.cpu().numpy()
-                for keypoints_per_object, keypoints_conf_per_object in zip(
-                    keypoints_array, keypoints_conf
-                ):
+                for keypoints_per_object, keypoints_conf_per_object in zip(keypoints_array, keypoints_conf):
                     keypoints_list = []
                     for kp, kp_conf in zip(keypoints_per_object, keypoints_conf_per_object):
                         if kp_conf >= confidence_threshold:
@@ -129,6 +113,7 @@ def export_frame_broom(results, color, pairs, confidence_threshold=CONFIDENCE_TH
                 continue
     return points, coords, keypoint_positions
 
+
 def process_frame(frame, current_time, percentage_green):
     global start_time, end_time, elapsed_time, broom_absence_timer_start, border_states, first_green_time, is_counting
     frame_resized = cv2.resize(frame, (new_width, new_height))
@@ -137,9 +122,7 @@ def process_frame(frame, current_time, percentage_green):
         results_broom, (0, 255, 0), pairs_broom, confidence_threshold=CONFIDENCE_THRESHOLD_BROOM
     )
 
-    border_colors = [
-        (0, 255, 0) if state["is_green"] else (0, 255, 255) for state in border_states.values()
-    ]
+    border_colors = [(0, 255, 0) if state["is_green"] else (0, 255, 255) for state in border_states.values()]
 
     broom_overlapping_any_border = False
 
@@ -186,13 +169,9 @@ def process_frame(frame, current_time, percentage_green):
             elif (current_time - broom_absence_timer_start) >= BROOM_ABSENCE_THRESHOLD:
                 print("reset")
                 if percentage_green >= PERCENTAGE_GREEN_THRESHOLD:
-                    print(
-                        f"Green border is bigger than {PERCENTAGE_GREEN_THRESHOLD}% and data is sent to server"
-                    )
+                    print(f"Green border is bigger than {PERCENTAGE_GREEN_THRESHOLD}% and data is sent to server")
                     if first_green_time is not None:
-                        elapsed_time = (
-                            current_time - first_green_time
-                        )
+                        elapsed_time = current_time - first_green_time
                     overlay = frame_resized.copy()
                     alpha = 0.5
                     for border_pt, color in zip(borders_pts, border_colors):
@@ -200,9 +179,7 @@ def process_frame(frame, current_time, percentage_green):
                     cv2.addWeighted(overlay, alpha, frame_resized, 1 - alpha, 0, frame_resized)
                     minutes, seconds = divmod(int(elapsed_time), 60)
                     time_str = f"Elapsed Time: {minutes:02d}:{seconds:02d}"
-                    cvzone.putTextRect(
-                        frame_resized, time_str, (10, 50), scale=1, thickness=2, offset=5
-                    )
+                    cvzone.putTextRect(frame_resized, time_str, (10, 50), scale=1, thickness=2, offset=5)
                     cvzone.putTextRect(
                         frame_resized,
                         f"Persentase Border Hijau: {percentage_green:.2f}%",
@@ -211,9 +188,7 @@ def process_frame(frame, current_time, percentage_green):
                         thickness=2,
                         offset=5,
                     )
-                    cvzone.putTextRect(
-                        frame_resized, f"FPS: {int(fps)}", (10, 100), scale=1, thickness=2, offset=5
-                    )
+                    cvzone.putTextRect(frame_resized, f"FPS: {int(fps)}", (10, 100), scale=1, thickness=2, offset=5)
                     image_path = "main/images/green_borders_image_182.jpg"
                     cv2.imwrite(image_path, frame_resized)
                     send_to_server("10.5.0.2", percentage_green, elapsed_time, image_path)
@@ -256,25 +231,24 @@ def process_frame(frame, current_time, percentage_green):
 
     return frame_resized
 
-def server_address(host):
-    if host == "localhost":
-        user = "root"
-        password = "robot123"
-        database = "report_ai_cctv"
-        port = 3306
-    elif host == "10.5.0.2":
-        user = "robot"
-        password = "robot123"
-        database = "report_ai_cctv"
-        port = 3307
-    return user, password, database, port
 
 def send_to_server(host, percentage_green, elapsed_time, image_path):
+    def server_address(host):
+        if host == "localhost":
+            user = "root"
+            password = "robot123"
+            database = "report_ai_cctv"
+            port = 3306
+        elif host == "10.5.0.2":
+            user = "robot"
+            password = "robot123"
+            database = "report_ai_cctv"
+            port = 3307
+        return user, password, database, port
+
     try:
         user, password, database, port = server_address(host)
-        connection = pymysql.connect(
-            host=host, user=user, password=password, database=database, port=port
-        )
+        connection = pymysql.connect(host=host, user=user, password=password, database=database, port=port)
         cursor = connection.cursor()
         table = "empbro"
         camera_name = "10.5.0.182"
@@ -312,26 +286,14 @@ def send_to_server(host, percentage_green, elapsed_time, image_path):
         if "connection" in locals():
             connection.close()
 
+
 if __name__ == "__main__":
-    model_broom = YOLO("D:/SBHNL/Resources/Models/Pretrained/BROOM/B5_LARGE/weights/best.pt").to(
-        "cuda"
-    )
+    model_broom = YOLO("broom5l.pt").to("cuda")
     model_broom.overrides["verbose"] = False
     print(f"Model Broom device: {next(model_broom.model.parameters()).device}")
-
-    rtsp_url = "videos/brooming1.mp4"
+    rtsp_url = "rtsp://admin:oracle2015@10.5.0.182:554/Streaming/Channels/1"
     cap = cv2.VideoCapture(rtsp_url)
-    if not cap.isOpened():
-        print(f"Error: Cannot open video {rtsp_url}")
-        exit()
-
-    pairs_broom = [
-        (0, 1),
-        (1, 2),
-        (2, 3),
-        (2, 4),
-    ]
-
+    pairs_broom = [(0, 1), (1, 2), (2, 3), (2, 4)]
     frame_count = 0
     process_every_n_frames = 2
 
@@ -346,20 +308,16 @@ if __name__ == "__main__":
             continue
 
         current_time = time.time()
-
         time_diff = current_time - prev_frame_time
         if time_diff > 0:
             fps = 1 / time_diff
         else:
             fps = 0
         prev_frame_time = current_time
-
         total_borders = len(borders)
         green_borders = sum(1 for state in border_states.values() if state["is_green"])
         percentage_green = (green_borders / total_borders) * 100
-
         frame_resized = process_frame(frame, current_time, percentage_green)
-
         cvzone.putTextRect(
             frame_resized,
             f"Persentase Border Hijau: {percentage_green:.2f}%",
@@ -368,9 +326,7 @@ if __name__ == "__main__":
             thickness=2,
             offset=5,
         )
-        cvzone.putTextRect(
-            frame_resized, f"FPS: {int(fps)}", (10, 100), scale=1, thickness=2, offset=5
-        )
+        cvzone.putTextRect(frame_resized, f"FPS: {int(fps)}", (10, 100), scale=1, thickness=2, offset=5)
         cv2.imshow("Broom and Person Detection", frame_resized)
 
         if cv2.waitKey(1) & 0xFF == ord("n"):
