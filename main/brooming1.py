@@ -14,8 +14,8 @@ from datetime import datetime, timedelta
 # Parameter Konfigurasi
 CONFIDENCE_THRESHOLD_BROOM = 0.9
 BROOM_ABSENCE_THRESHOLD = 10  # Jika sapu tidak terdeteksi overlapping border selama 5 detik
-BROOM_TOUCH_THRESHOLD = 0.00005  # ganti ke 0 untuk menghilangkan waktu overlapping
-PERCENTAGE_GREEN_THRESHOLD = 75
+BROOM_TOUCH_THRESHOLD = 0  # ganti ke 0 untuk menghilangkan waktu overlapping
+PERCENTAGE_GREEN_THRESHOLD = 50
 
 # Set Resolusi Asli dan Resolusi Baru
 original_width, original_height = 1280, 720  # Resolusi asli
@@ -239,7 +239,7 @@ def process_frame(frame, current_time, percentage_green):
                     )
                     image_path = "main/images/green_borders_image_182.jpg"
                     cv2.imwrite(image_path, frame_resized)
-                    send_to_server("10.5.0.8", percentage_green, elapsed_time, image_path)
+                    send_to_server("10.5.0.2", percentage_green, elapsed_time, image_path)
 
                 # Reset semua border menjadi kuning
                 for idx in range(len(borders)):
@@ -291,7 +291,7 @@ def server_address(host):
         password = "robot123"
         database = "report_ai_cctv"
         port = 3306
-    elif host == "10.5.0.8":
+    elif host == "10.5.0.2":
         user = "robot"
         password = "robot123"
         database = "report_ai_cctv"
@@ -355,8 +355,8 @@ if __name__ == "__main__":
     print(f"Model Broom device: {next(model_broom.model.parameters()).device}")
 
     # Definisikan Sumber Video
-    # rtsp_url = "videos/test1.mp4"
-    rtsp_url = "rtsp://admin:oracle2015@10.5.0.182:554/Streaming/Channels/1"
+    rtsp_url = "videos/brooming1.mp4"
+    # rtsp_url = "rtsp://admin:oracle2015@10.5.0.182:554/Streaming/Channels/1"
     cap = cv2.VideoCapture(rtsp_url)
     if not cap.isOpened():
         print(f"Error: Cannot open video {rtsp_url}")
