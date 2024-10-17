@@ -76,9 +76,9 @@ border_states = {
 borders_pts = [np.array(border, np.int32) for border in scaled_borders]
 
 
-def process_model_broom(frame):
+def process_model_broom(frame, model):
     with torch.no_grad():
-        results_broom = model_broom(frame, imgsz=960)
+        results_broom = model(frame, imgsz=960)
     return results_broom
 
 
@@ -114,10 +114,10 @@ def export_frame_broom(results, color, pairs, confidence_threshold=CONFIDENCE_TH
     return points, coords, keypoint_positions
 
 
-def process_frame(frame, current_time, percentage_green):
+def process_frame(frame, current_time, percentage_green, pairs_broom, model_broom):
     global start_time, end_time, elapsed_time, broom_absence_timer_start, border_states, first_green_time, is_counting
     frame_resized = cv2.resize(frame, (new_width, new_height))
-    results_broom = process_model_broom(frame_resized)
+    results_broom = process_model_broom(frame_resized, model_broom)
     points_broom, coords_broom, keypoint_positions = export_frame_broom(
         results_broom, (0, 255, 0), pairs_broom, confidence_threshold=CONFIDENCE_THRESHOLD_BROOM
     )
@@ -287,15 +287,17 @@ def send_to_server(host, percentage_green, elapsed_time, image_path):
             connection.close()
 
 
-if __name__ == "__main__":
-    model_broom = YOLO("broom5l.pt").to("cuda")
-    model_broom.overrides["verbose"] = False
-    print(f"Model Broom device: {next(model_broom.model.parameters()).device}")
+def main():
+    global prev_frame_time
     rtsp_url = "rtsp://admin:oracle2015@10.5.0.182:554/Streaming/Channels/1"
     cap = cv2.VideoCapture(rtsp_url)
     pairs_broom = [(0, 1), (1, 2), (2, 3), (2, 4)]
     frame_count = 0
     process_every_n_frames = 2
+
+    model_broom = YOLO("broom5l.pt").to("cuda")
+    model_broom.overrides["verbose"] = False
+    print(f"Model Broom device: {next(model_broom.model.parameters()).device}")
 
     while True:
         ret, frame = cap.read()
@@ -317,7 +319,7 @@ if __name__ == "__main__":
         total_borders = len(borders)
         green_borders = sum(1 for state in border_states.values() if state["is_green"])
         percentage_green = (green_borders / total_borders) * 100
-        frame_resized = process_frame(frame, current_time, percentage_green)
+        frame_resized = process_frame(frame, current_time, percentage_green, pairs_broom, model_broom)
         cvzone.putTextRect(
             frame_resized,
             f"Persentase Border Hijau: {percentage_green:.2f}%",
@@ -334,3 +336,7 @@ if __name__ == "__main__":
 
     cap.release()
     cv2.destroyAllWindows()
+
+
+if __name__ == "__main__":
+    main()
