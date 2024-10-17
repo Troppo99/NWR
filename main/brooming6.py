@@ -10,11 +10,10 @@ import cvzone
 import pymysql
 from datetime import datetime, timedelta
 
-
 # Parameter Konfigurasi
 CONFIDENCE_THRESHOLD_BROOM = 0.9
-BROOM_ABSENCE_THRESHOLD = 10  # Jika sapu tidak terdeteksi overlapping border selama 5 detik
-BROOM_TOUCH_THRESHOLD = 0.00005  # ganti ke 0 untuk menghilangkan waktu overlapping
+BROOM_ABSENCE_THRESHOLD = 30  # Jika sapu tidak terdeteksi overlapping border selama 5 detik
+BROOM_TOUCH_THRESHOLD = 0.2  # ganti ke 0 untuk menghilangkan waktu overlapping
 PERCENTAGE_GREEN_THRESHOLD = 75
 
 # Set Resolusi Asli dan Resolusi Baru
@@ -27,36 +26,23 @@ scale_y = new_height / original_height
 
 # Mendefinisikan Borders (koordinat sudah sesuai dengan resolusi 1280x720)
 borders = [
-    [(30, 493), (114, 439), (158, 510), (64, 567)],
-    [(114, 439), (210, 383), (261, 448), (158, 510)],
-    [(210, 383), (308, 326), (372, 384), (261, 448)],
-    [(308, 326), (454, 247), (533, 296), (372, 384)],
-    [(117, 667), (64, 567), (158, 510), (222, 601)],
-    [(222, 601), (158, 510), (261, 448), (341, 530)],
-    [(341, 530), (261, 448), (372, 384), (465, 459)],
-    [(465, 459), (372, 384), (533, 296), (635, 357)],
-    [(533, 296), (632, 247), (731, 303), (635, 357)],
-    [(731, 303), (632, 247), (713, 208), (812, 258)],
-    [(149, 715), (117, 667), (222, 601), (312, 713)],
-    [(312, 713), (222, 601), (341, 530), (447, 634)],
-    [(447, 634), (341, 530), (465, 459), (580, 547)],
-    [(580, 547), (465, 459), (635, 357), (753, 428)],
-    [(753, 428), (635, 357), (731, 303), (841, 365)],
-    [(841, 365), (731, 303), (812, 258), (914, 311)],
-    [(312, 713), (447, 634), (541, 715)],
-    [(541, 715), (447, 634), (580, 547), (714, 641), (622, 713)],
-    [(714, 641), (580, 547), (753, 428), (877, 506)],
-    [(877, 506), (753, 428), (841, 365), (957, 432)],
-    [(957, 432), (841, 365), (914, 311), (1014, 370)],
-    [(622, 713), (714, 641), (825, 712)],
-    [(825, 712), (714, 641), (877, 506), (996, 580), (877, 712)],
-    [(996, 580), (877, 506), (957, 432), (1061, 496)],
-    [(1061, 496), (957, 432), (1014, 370), (1110, 429)],
-    [(877, 712), (996, 580), (1138, 663), (1108, 714)],
-    [(1138, 663), (996, 580), (1061, 496), (1184, 573)],
-    [(1184, 573), (1061, 496), (1110, 429), (1221, 504)],
+    [(652, 108), (720, 110), (719, 129), (647, 126)],
+    [(647, 126), (719, 129), (718, 155), (639, 149)],
+    [(639, 149), (718, 155), (717, 185), (624, 180)],
+    [(624, 180), (717, 185), (716, 216), (615, 210)],
+    [(615, 210), (716, 216), (713, 249), (603, 241)],
+    [(603, 241), (713, 249), (711, 287), (587, 281)],
+    [(587, 281), (711, 287), (708, 327), (572, 319)],
+    [(572, 319), (708, 327), (705, 385), (552, 373)],
+    [(552, 373), (705, 385), (701, 443), (534, 427)],
+    [(534, 427), (701, 443), (696, 504), (511, 486)],
+    [(511, 486), (696, 504), (692, 574), (485, 559)],
+    [(442, 554), (415, 636), (683, 649), (692, 574), (485, 559)],
+    [(388, 710), (415, 636), (683, 649), (677, 714)],
+    [(705, 385), (858, 389), (863, 462), (700, 458), (701, 443)],
+    [(700, 458), (863, 462), (882, 576), (692, 574)],
+    [(882, 576), (692, 574), (683, 649), (677, 714), (904, 711)],
 ]
-
 # Skalakan Borders sesuai dengan resolusi baru
 scaled_borders = []
 for border in borders:
@@ -99,6 +85,9 @@ fps = 0
 # Tambahkan variabel global baru
 first_green_time = None
 is_counting = False
+
+# Definisikan variabel global camera_name
+camera_name = "10.5.0.185"
 
 
 # Fungsi untuk Memproses Deteksi Sapu
@@ -238,9 +227,9 @@ def process_frame(frame, current_time, percentage_green):
                     cvzone.putTextRect(
                         frame_resized, f"FPS: {int(fps)}", (10, 100), scale=1, thickness=2, offset=5
                     )
-                    image_path = "main/images/green_borders_image_182.jpg"
+                    image_path = "main/images/green_borders_image_161.jpg"
                     cv2.imwrite(image_path, frame_resized)
-                    send_to_server("10.5.0.8", percentage_green, elapsed_time, image_path)
+                    send_to_server("10.5.0.2", percentage_green, elapsed_time, image_path)
 
                 # Reset semua border menjadi kuning
                 for idx in range(len(borders)):
@@ -292,7 +281,7 @@ def server_address(host):
         password = "robot123"
         database = "report_ai_cctv"
         port = 3306
-    elif host == "10.5.0.8":
+    elif host == "10.5.0.2":
         user = "robot"
         password = "robot123"
         database = "report_ai_cctv"
@@ -301,6 +290,7 @@ def server_address(host):
 
 
 def send_to_server(host, percentage_green, elapsed_time, image_path):
+    global camera_name
     try:
         user, password, database, port = server_address(host)
         connection = pymysql.connect(
@@ -308,7 +298,8 @@ def send_to_server(host, percentage_green, elapsed_time, image_path):
         )
         cursor = connection.cursor()
         table = "empbro"
-        camera_name = "10.5.0.182"
+        # Hapus inisialisasi ulang camera_name di sini
+        # camera_name = "10.5.0.180"
         timestamp_done = datetime.now()  # Keep as datetime object
         timestamp_start = timestamp_done - timedelta(seconds=elapsed_time)
 
@@ -356,8 +347,7 @@ if __name__ == "__main__":
     print(f"Model Broom device: {next(model_broom.model.parameters()).device}")
 
     # Definisikan Sumber Video
-    # rtsp_url = "videos/test1.mp4"
-    rtsp_url = "rtsp://admin:oracle2015@10.5.0.182:554/Streaming/Channels/1"
+    rtsp_url = f"rtsp://admin:oracle2015@{camera_name}:554/Streaming/Channels/1"
     cap = cv2.VideoCapture(rtsp_url)
     if not cap.isOpened():
         print(f"Error: Cannot open video {rtsp_url}")
