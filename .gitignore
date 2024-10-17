@@ -5,3 +5,5 @@ main/images/*
 run/*
 videos/*
 logs/*
+.idea/*
+main/logs/*
