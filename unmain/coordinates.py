@@ -116,9 +116,11 @@ def undo_last_point():
 # Function to print all chains and their points
 def print_chains():
     print("\nChains and Points:")
+    non_empty_chain_count = 0  # Variabel untuk menghitung chain yang tidak kosong
     for idx, chain in enumerate(chains):
-        if len(chain) > 0:  # Avoid printing empty chains
-            print(f"Chain {idx + 1}:")
+        if len(chain) > 0:  # Hanya hitung dan print jika chain tidak kosong
+            non_empty_chain_count += 1
+            print(f"Chain {non_empty_chain_count}:")  # Cetak nomor chain yang tidak kosong
             for i, point in enumerate(chain):
                 print(f"  Point {i + 1}: ({point[0]}, {point[1]})")
 
