@@ -10,22 +10,17 @@ import cvzone
 import pymysql
 from datetime import datetime, timedelta
 
-
-# Parameter Konfigurasi
 CONFIDENCE_THRESHOLD_BROOM = 0.9
-BROOM_ABSENCE_THRESHOLD = 10  # Jika sapu tidak terdeteksi overlapping border selama 5 detik
-BROOM_TOUCH_THRESHOLD = 0  # ganti ke 0 untuk menghilangkan waktu overlapping
+BROOM_ABSENCE_THRESHOLD = 10
+BROOM_TOUCH_THRESHOLD = 0
 PERCENTAGE_GREEN_THRESHOLD = 50
 
-# Set Resolusi Asli dan Resolusi Baru
-original_width, original_height = 1280, 720  # Resolusi asli
-new_width, new_height = 960, 540  # Resolusi baru yang lebih rendah
+original_width, original_height = 1280, 720
+new_width, new_height = 960, 540
 
-# Hitung Faktor Skala
 scale_x = new_width / original_width
 scale_y = new_height / original_height
 
-# Mendefinisikan Borders (koordinat sudah sesuai dengan resolusi 1280x720)
 borders = [
     [(29, 493), (107, 444), (168, 543), (81, 598)],
     [(168, 543), (182, 533), (194, 550), (297, 487), (245, 429), (138, 491)],
@@ -56,7 +51,6 @@ borders = [
     [(1116, 528), (1189, 576), (1228, 492), (1160, 451)],
 ]
 
-# Skalakan Borders sesuai dengan resolusi baru
 scaled_borders = []
 for border in borders:
     scaled_border = []
@@ -66,14 +60,11 @@ for border in borders:
         scaled_border.append((scaled_x, scaled_y))
     scaled_borders.append(scaled_border)
 
-# Inisialisasi Warna untuk Setiap Border sebagai Cyan
-default_border_color = (0, 255, 255)  # Cyan
-highlight_border_color = (0, 255, 0)  # Hijau
+default_border_color = (0, 255, 255)
+highlight_border_color = (0, 255, 0)
 
-# Konversi Koordinat ke Numpy Arrays
 borders_pts = [np.array(border, np.int32) for border in scaled_borders]
 
-# Struktur Data untuk Menyimpan State Border
 border_states = {
     idx: {
         "sapu_time": None,
@@ -84,30 +75,23 @@ border_states = {
         "last_broom_overlap_time": None,
     }
     for idx in range(len(borders))
-}  # Menandai deteksi bersama  # Waktu akumulasi overlapping sapu  # Waktu terakhir overlapping sapu
+}
 
-# Variabel untuk Melacak Waktu
 start_time = None
 end_time = None
 elapsed_time = None
-broom_absence_timer_start = None  # Timer untuk ketidakhadiran sapu overlapping border
+broom_absence_timer_start = None
 
-# Variabel untuk FPS
 prev_frame_time = time.time()
 fps = 0
-# Tambahkan variabel global baru
 first_green_time = None
 is_counting = False
 
-
-# Fungsi untuk Memproses Deteksi Sapu
 def process_model_broom(frame):
     with torch.no_grad():
-        results_broom = model_broom(frame, imgsz=960)  # Mengurangi ukuran input model
+        results_broom = model_broom(frame, imgsz=960)
     return results_broom
 
-
-# Fungsi untuk Mengekstrak Keypoints Sapu
 def export_frame_broom(results, color, pairs, confidence_threshold=CONFIDENCE_THRESHOLD_BROOM):
     points = []
     coords = []
@@ -121,8 +105,8 @@ def export_frame_broom(results, color, pairs, confidence_threshold=CONFIDENCE_TH
             and keypoints_data.conf is not None
         ):
             if keypoints_data.shape[0] > 0:
-                keypoints_array = keypoints_data.xy.cpu().numpy()  # shape (n, k, 2)
-                keypoints_conf = keypoints_data.conf.cpu().numpy()  # shape (n, k)
+                keypoints_array = keypoints_data.xy.cpu().numpy()
+                keypoints_conf = keypoints_data.conf.cpu().numpy()
                 for keypoints_per_object, keypoints_conf_per_object in zip(
                     keypoints_array, keypoints_conf
                 ):
@@ -132,7 +116,7 @@ def export_frame_broom(results, color, pairs, confidence_threshold=CONFIDENCE_TH
                             x, y = kp[0], kp[1]
                             keypoints_list.append((int(x), int(y)))
                         else:
-                            keypoints_list.append(None)  # Keypoint diabaikan jika confidence rendah
+                            keypoints_list.append(None)
                     keypoint_positions.append(keypoints_list)
                     for point in keypoints_list:
                         if point is not None:
@@ -145,8 +129,6 @@ def export_frame_broom(results, color, pairs, confidence_threshold=CONFIDENCE_TH
                 continue
     return points, coords, keypoint_positions
 
-
-# Fungsi untuk Memproses Setiap Frame
 def process_frame(frame, current_time, percentage_green):
     global start_time, end_time, elapsed_time, broom_absence_timer_start, border_states, first_green_time, is_counting
     frame_resized = cv2.resize(frame, (new_width, new_height))
@@ -155,7 +137,6 @@ def process_frame(frame, current_time, percentage_green):
         results_broom, (0, 255, 0), pairs_broom, confidence_threshold=CONFIDENCE_THRESHOLD_BROOM
     )
 
-    # Inisialisasi warna border berdasarkan state sebelumnya
     border_colors = [
         (0, 255, 0) if state["is_green"] else (0, 255, 255) for state in border_states.values()
     ]
@@ -165,7 +146,7 @@ def process_frame(frame, current_time, percentage_green):
     for border_id, border_pt in enumerate(borders_pts):
         sapu_overlapping = False
         for keypoints_list in keypoint_positions:
-            for idx in [2, 3, 4]:  # Hanya cek keypoint 2, 3, dan 4
+            for idx in [2, 3, 4]:
                 if idx < len(keypoints_list):
                     kp = keypoints_list[idx]
                     if kp is not None:
@@ -187,11 +168,10 @@ def process_frame(frame, current_time, percentage_green):
 
             if border_states[border_id]["broom_overlap_time"] >= BROOM_TOUCH_THRESHOLD:
                 border_states[border_id]["is_green"] = True
-                border_colors[border_id] = (0, 255, 0)  # Ubah warna menjadi hijau
+                border_colors[border_id] = (0, 255, 0)
         else:
             border_states[border_id]["last_broom_overlap_time"] = None
 
-    # Logika untuk Timer Ketidakhadiran Sapu Overlapping Border
     green_borders_exist = any(state["is_green"] for state in border_states.values())
     if green_borders_exist:
         if not is_counting:
@@ -204,20 +184,17 @@ def process_frame(frame, current_time, percentage_green):
             if broom_absence_timer_start is None:
                 broom_absence_timer_start = current_time
             elif (current_time - broom_absence_timer_start) >= BROOM_ABSENCE_THRESHOLD:
-                # Reset semua border dan timer
                 print("reset")
                 if percentage_green >= PERCENTAGE_GREEN_THRESHOLD:
-                    # Simpan gambar sebelum reset terjadi
                     print(
                         f"Green border is bigger than {PERCENTAGE_GREEN_THRESHOLD}% and data is sent to server"
                     )
-                    # Pastikan gambar yang disimpan memiliki elemen border warna dan informasi tambahan
                     if first_green_time is not None:
                         elapsed_time = (
                             current_time - first_green_time
-                        )  # Update elapsed_time sebelum dikirim
+                        )
                     overlay = frame_resized.copy()
-                    alpha = 0.5  # Faktor Transparansi
+                    alpha = 0.5
                     for border_pt, color in zip(borders_pts, border_colors):
                         cv2.fillPoly(overlay, pts=[border_pt], color=color)
                     cv2.addWeighted(overlay, alpha, frame_resized, 1 - alpha, 0, frame_resized)
@@ -241,14 +218,13 @@ def process_frame(frame, current_time, percentage_green):
                     cv2.imwrite(image_path, frame_resized)
                     send_to_server("10.5.0.2", percentage_green, elapsed_time, image_path)
 
-                # Reset semua border menjadi kuning
                 for idx in range(len(borders)):
                     border_states[idx] = {
                         "is_green": False,
                         "broom_overlap_time": 0.0,
                         "last_broom_overlap_time": None,
                     }
-                    border_colors[idx] = (0, 255, 255)  # Kembalikan ke warna kuning
+                    border_colors[idx] = (0, 255, 255)
                 first_green_time = None
                 is_counting = False
                 broom_absence_timer_start = None
@@ -258,24 +234,20 @@ def process_frame(frame, current_time, percentage_green):
             first_green_time = None
             is_counting = False
 
-    # Gambar Keypoints dan Garis untuk Sapu
     if points_broom and coords_broom:
         for x, y, color in coords_broom:
             cv2.line(frame_resized, x, y, color, 2)
         for point in points_broom:
             cv2.circle(frame_resized, point, 4, (0, 255, 255), -1)
 
-    # Gambar Poligon dan Isi dengan Warna Transparan
     overlay = frame_resized.copy()
-    alpha = 0.5  # Faktor Transparansi
+    alpha = 0.5
 
     for border_pt, color in zip(borders_pts, border_colors):
         cv2.fillPoly(overlay, pts=[border_pt], color=color)
 
-    # Blend overlay dengan frame asli
     cv2.addWeighted(overlay, alpha, frame_resized, 1 - alpha, 0, frame_resized)
 
-    # Tampilkan Elapsed Time jika timer sudah dimulai
     if is_counting and first_green_time is not None:
         elapsed_time = current_time - first_green_time
         minutes, seconds = divmod(int(elapsed_time), 60)
@@ -283,7 +255,6 @@ def process_frame(frame, current_time, percentage_green):
         cvzone.putTextRect(frame_resized, time_str, (10, 50), scale=1, thickness=2, offset=5)
 
     return frame_resized
-
 
 def server_address(host):
     if host == "localhost":
@@ -298,7 +269,6 @@ def server_address(host):
         port = 3307
     return user, password, database, port
 
-
 def send_to_server(host, percentage_green, elapsed_time, image_path):
     try:
         user, password, database, port = server_address(host)
@@ -308,14 +278,12 @@ def send_to_server(host, percentage_green, elapsed_time, image_path):
         cursor = connection.cursor()
         table = "empbro"
         camera_name = "10.5.0.182"
-        timestamp_done = datetime.now()  # Keep as datetime object
+        timestamp_done = datetime.now()
         timestamp_start = timestamp_done - timedelta(seconds=elapsed_time)
 
-        # Format timestamps for database insertion
         timestamp_done_str = timestamp_done.strftime("%Y-%m-%d %H:%M:%S")
         timestamp_start_str = timestamp_start.strftime("%Y-%m-%d %H:%M:%S")
 
-        # Read the image file in binary mode
         with open(image_path, "rb") as file:
             binary_image = file.read()
 
@@ -335,43 +303,37 @@ def send_to_server(host, percentage_green, elapsed_time, image_path):
             ),
         )
         connection.commit()
-        print(f"Data berhasil dikirim ")  # Gantikan logger dengan print
+        print(f"Data berhasil dikirim ")
     except pymysql.MySQLError as e:
-        print(f"Error saat mengirim data : {e}")  # Gantikan logger dengan print
+        print(f"Error saat mengirim data : {e}")
     finally:
         if "cursor" in locals():
             cursor.close()
         if "connection" in locals():
             connection.close()
 
-
 if __name__ == "__main__":
-    # Muat hanya Model Deteksi Sapu
     model_broom = YOLO("D:/SBHNL/Resources/Models/Pretrained/BROOM/B5_LARGE/weights/best.pt").to(
         "cuda"
-    )  # Model Sapu
+    )
     model_broom.overrides["verbose"] = False
-    # Verifikasi bahwa model berada di GPU
     print(f"Model Broom device: {next(model_broom.model.parameters()).device}")
 
-    # Definisikan Sumber Video
     rtsp_url = "videos/brooming1.mp4"
-    # rtsp_url = "rtsp://admin:oracle2015@10.5.0.182:554/Streaming/Channels/1"
     cap = cv2.VideoCapture(rtsp_url)
     if not cap.isOpened():
         print(f"Error: Cannot open video {rtsp_url}")
         exit()
 
-    # Set Resolusi yang Diinginkan
     pairs_broom = [
         (0, 1),
         (1, 2),
         (2, 3),
         (2, 4),
-    ]  # Definisikan pasangan keypoint untuk menggambar garis
+    ]
 
     frame_count = 0
-    process_every_n_frames = 2  # Proses setiap 2 frame
+    process_every_n_frames = 2
 
     while True:
         ret, frame = cap.read()
@@ -381,24 +343,21 @@ if __name__ == "__main__":
 
         frame_count += 1
         if frame_count % process_every_n_frames != 0:
-            continue  # Lewati frame ini
+            continue
 
         current_time = time.time()
 
-        # Perhitungan FPS
         time_diff = current_time - prev_frame_time
         if time_diff > 0:
             fps = 1 / time_diff
         else:
             fps = 0
-        prev_frame_time = current_time  # Perbarui waktu sebelumnya
+        prev_frame_time = current_time
 
-        # Hitung dan Cetak Persentase Border Hijau
         total_borders = len(borders)
         green_borders = sum(1 for state in border_states.values() if state["is_green"])
         percentage_green = (green_borders / total_borders) * 100
 
-        # Proses frame
         frame_resized = process_frame(frame, current_time, percentage_green)
 
         cvzone.putTextRect(
@@ -409,13 +368,11 @@ if __name__ == "__main__":
             thickness=2,
             offset=5,
         )
-        # Tampilkan Elapsed Time dan FPS
         cvzone.putTextRect(
             frame_resized, f"FPS: {int(fps)}", (10, 100), scale=1, thickness=2, offset=5
         )
         cv2.imshow("Broom and Person Detection", frame_resized)
 
-        # Tekan 'n' untuk keluar
         if cv2.waitKey(1) & 0xFF == ord("n"):
             break
 
