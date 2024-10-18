@@ -35,30 +35,34 @@ class opencvSection:
                 pass
 
 
-def run_detection(camera_name, stop_flag=None):
+def run_detection(camera_name, frame_queue, stop_flag):
     video_path, _ = camera(camera_name)
-    frame_queue = queue.Queue(maxsize=10)
     opencv = opencvSection(video_path)
     cap = opencv.connect_to_stream()
-    thread = thread_read_frame(opencv, frame_queue, stop_flag)
+    while not stop_flag.is_set():
+        ret, frame = cap.read()
+        if not ret:
+            cap.release()
+            time.sleep(5)
+            cap = opencv.connect_to_stream()
+            continue
+        try:
+            frame_queue.put((camera_name, frame), block=False)
+        except queue.Full:
+            pass
+
+    cap.release()
+
+
+def display_thread(frame_queue, stop_flag):
     while not stop_flag.is_set():
         if not frame_queue.empty():
-            frame = frame_queue.get()
+            camera_name, frame = frame_queue.get()
             cv2.imshow(f"ALKBR TESTING - {camera_name}", frame)
-            key = cv2.waitKey(1) & 0xFF
-            if key == ord("n"):
+            if cv2.waitKey(10) & 0xFF == ord("n"):
                 stop_flag.set()
                 break
-    cap.release()
     cv2.destroyAllWindows()
-    thread.join()
-
-
-def thread_read_frame(opencv, frame_queue, stop_flag):
-    thread = threading.Thread(target=opencv.read_frame, args=(frame_queue, stop_flag))
-    thread.daemon = True
-    thread.start()
-    return thread
 
 
 def camera(name):
@@ -74,15 +78,17 @@ def camera(name):
 
 if __name__ == "__main__":
     camera_names = ["10.5.0.161", "10.5.0.170", "10.5.0.182"]
+    frame_queue = queue.Queue(maxsize=20)
+    stop_flag = threading.Event()
     threads = []
-    stop_flags = []
-
     for camera_name in camera_names:
-        stop_flag = threading.Event()
-        stop_flags.append(stop_flag)
-        thread = threading.Thread(target=run_detection, args=(camera_name, stop_flag))
+        thread = threading.Thread(target=run_detection, args=(camera_name, frame_queue, stop_flag))
         threads.append(thread)
         thread.start()
 
+    display_thread_instance = threading.Thread(target=display_thread, args=(frame_queue, stop_flag))
+    display_thread_instance.start()
+
     for thread in threads:
         thread.join()
+    display_thread_instance.join()
