@@ -9,6 +9,11 @@ import threading
 import torch
 import cvzone
 
+start_time = time.time()
+x = 0
+# Inisialisasi Model Sekali
+model_broom = YOLO("broom5l.pt").to("cuda")
+model_broom.overrides["verbose"] = False
 
 # Konfigurasi umum
 CONFIDENCE_THRESHOLD_BROOM = 0.9
@@ -23,11 +28,18 @@ class opencvSection:
         self.video = video
         self.cap = cv2.VideoCapture(video)
 
-    def connect_to_stream(self):
-        while not self.cap.isOpened():
+    def connect_to_stream(self, max_attempts=5):
+        attempts = 0
+        while not self.cap.isOpened() and attempts < max_attempts:
             self.cap.release()
-            time.sleep(5)
+            time.sleep(2)  # Kurangi waktu sleep untuk mempercepat proses
             self.cap = cv2.VideoCapture(self.video)
+            attempts += 1
+
+        # Gunakan resolusi rendah untuk mempercepat frame pertama
+        self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
+        self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
+
         return self.cap
 
     def read_frame(self, frame_queue, model, stop_flag):
@@ -35,7 +47,7 @@ class opencvSection:
             ret, frame = self.cap.read()
             if not ret:
                 self.cap.release()
-                time.sleep(5)
+                time.sleep(2)  # Mengurangi waktu sleep untuk mempercepat reconnect
                 self.cap = self.connect_to_stream()
                 continue
 
@@ -55,7 +67,6 @@ class opencvSection:
                     cv2.circle(frame_resized, point, 4, (0, 255, 255), -1)
 
             try:
-                # Memasukkan frame yang telah dianalisis ke dalam queue untuk diproses di thread utama
                 frame_queue.put((self.video, frame_resized), block=False)
             except queue.Full:
                 pass
@@ -68,18 +79,25 @@ def run_detection(camera_name, frame_queue, stop_flag):
     opencv = opencvSection(video_path)
     cap = opencv.connect_to_stream()
 
-    # Memulai membaca frame dan melakukan inferensi
+    # Mulai membaca frame dan melakukan inferensi
     opencv.read_frame(frame_queue, model, stop_flag)
 
 
 def display_frames(frame_queue, stop_flag, threads):
+    global x
     # Menampilkan frame di thread utama
     while not stop_flag.is_set():
         if not frame_queue.empty():
             camera_name, frame = frame_queue.get()
             # Tampilkan frame pada window yang berbeda untuk setiap kamera
             cv2.imshow(f"ALKBR TESTING - {camera_name}", frame)
+            if x == 0:
+                total_run_time = time.time() - start_time
+                print(f"Waktu total menunggu window muncul: {total_run_time:.2f} detik")
+                x = 1
             if cv2.waitKey(1) & 0xFF == ord("n"):
+                total_run_time = time.time() - start_time
+                print(f"Waktu total dari start hingga 'n' ditekan: {total_run_time:.2f} detik")
                 stop_flag.set()
                 break
 
@@ -97,9 +115,7 @@ def camera(name):
         "10.5.0.182": "182",
     }
     video = f"rtsp://admin:oracle2015@10.5.0.{configurations[name]}:554/Streaming/Channels/1"
-    model = YOLO("broom5l.pt").to("cuda")  # Menggunakan model YOLO dan mengarahkannya ke GPU untuk performa lebih baik
-    model.overrides["verbose"] = False
-    return video, model
+    return video, model_broom
 
 
 def export_frame_broom(results, color, pairs, confidence_threshold=CONFIDENCE_THRESHOLD_BROOM):
