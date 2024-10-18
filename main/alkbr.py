@@ -1,109 +1,112 @@
 import os
+
 os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
 import cv2
 from ultralytics import YOLO
 import numpy as np
 import time
-import queue
-import threading
+import multiprocessing
 import torch
-import cvzone
 
 start_time = time.time()
 x = 0
-# Inisialisasi Model Sekali
-model_broom = YOLO("broom5l.pt").to("cuda")
-model_broom.overrides["verbose"] = False
 
-# Konfigurasi umum
+# Configuration
 CONFIDENCE_THRESHOLD_BROOM = 0.9
-new_width, new_height = 960, 540
-scale_x = new_width / 1280
-scale_y = new_height / 720
+new_width, new_height = 640, 480
 pairs_broom = [(0, 1), (1, 2), (2, 3), (2, 4)]
+process_every_n_frames = 5
 
 
-class opencvSection:
-    def __init__(self, video):
-        self.video = video
-        self.cap = cv2.VideoCapture(video)
+def opencv_section(video, frame_queue, stop_flag):
+    cap = cv2.VideoCapture(video)
+    cap.set(cv2.CAP_PROP_FRAME_WIDTH, new_width)
+    cap.set(cv2.CAP_PROP_FRAME_HEIGHT, new_height)
 
-    def connect_to_stream(self, max_attempts=5):
-        attempts = 0
-        while not self.cap.isOpened() and attempts < max_attempts:
-            self.cap.release()
-            time.sleep(2)  # Kurangi waktu sleep untuk mempercepat proses
-            self.cap = cv2.VideoCapture(self.video)
-            attempts += 1
+    # Load model inside the process
+    start_model_load_time = time.time()
+    model = YOLO("broom5l.pt").to("cuda")  # Use a smaller model if necessary
+    model.overrides["verbose"] = False
+    end_model_load_time = time.time()
+    model_load_time = end_model_load_time - start_model_load_time
+    print(f"Model load time for {video}: {model_load_time:.2f} seconds")
 
-        # Gunakan resolusi rendah untuk mempercepat frame pertama
-        self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
-        self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
+    frame_count = 0
 
-        return self.cap
-
-    def read_frame(self, frame_queue, model, stop_flag):
-        while not stop_flag.is_set():
-            ret, frame = self.cap.read()
-            if not ret:
-                self.cap.release()
-                time.sleep(2)  # Mengurangi waktu sleep untuk mempercepat reconnect
-                self.cap = self.connect_to_stream()
-                continue
-
-            # Resize frame untuk efisiensi deteksi
-            frame_resized = cv2.resize(frame, (new_width, new_height))
-
-            # Proses deteksi menggunakan model YOLO
-            with torch.no_grad():
-                results_broom = model(frame_resized, imgsz=960)
-            points, coords, _ = export_frame_broom(results_broom, (0, 255, 0), pairs_broom)
-
-            # Tambahkan hasil deteksi ke frame
-            if points and coords:
-                for x, y, color in coords:
-                    cv2.line(frame_resized, x, y, color, 2)
-                for point in points:
-                    cv2.circle(frame_resized, point, 4, (0, 255, 255), -1)
-
-            try:
-                frame_queue.put((self.video, frame_resized), block=False)
-            except queue.Full:
-                pass
-
-        self.cap.release()
-
-
-def run_detection(camera_name, frame_queue, stop_flag):
-    video_path, model = camera(camera_name)
-    opencv = opencvSection(video_path)
-    cap = opencv.connect_to_stream()
-
-    # Mulai membaca frame dan melakukan inferensi
-    opencv.read_frame(frame_queue, model, stop_flag)
-
-
-def display_frames(frame_queue, stop_flag, threads):
-    global x
-    # Menampilkan frame di thread utama
     while not stop_flag.is_set():
-        if not frame_queue.empty():
-            camera_name, frame = frame_queue.get()
-            # Tampilkan frame pada window yang berbeda untuk setiap kamera
-            cv2.imshow(f"ALKBR TESTING - {camera_name}", frame)
-            if x == 0:
-                total_run_time = time.time() - start_time
-                print(f"Waktu total menunggu window muncul: {total_run_time:.2f} detik")
-                x = 1
-            if cv2.waitKey(1) & 0xFF == ord("n"):
-                total_run_time = time.time() - start_time
-                print(f"Waktu total dari start hingga 'n' ditekan: {total_run_time:.2f} detik")
-                stop_flag.set()
-                break
+        ret, frame = cap.read()
+        if not ret:
+            cap.release()
+            time.sleep(1)
+            cap = cv2.VideoCapture(video)
+            cap.set(cv2.CAP_PROP_FRAME_WIDTH, new_width)
+            cap.set(cv2.CAP_PROP_FRAME_HEIGHT, new_height)
+            continue
 
-    # Tunggu semua thread pengambil frame selesai sebelum keluar
-    for thread in threads:
-        thread.join()
+        frame_count += 1
+        if frame_count % process_every_n_frames != 0:
+            continue
+
+        frame_resized = cv2.resize(frame, (new_width, new_height))
+
+        # Start timing inference
+        start_inference_time = time.time()
+
+        # Run detection
+        with torch.no_grad():
+            results_broom = model(frame_resized)
+
+        # End timing inference
+        end_inference_time = time.time()
+        inference_time = end_inference_time - start_inference_time
+        print(f"Inference time for {video}: {inference_time:.2f} seconds")
+
+        # Process detection results
+        points, coords, _ = export_frame_broom(results_broom, (0, 255, 0), pairs_broom)
+
+        # Add detection results to frame
+        if points and coords:
+            for x1, y1, color in coords:
+                cv2.line(frame_resized, x1, y1, color, 2)
+            for point in points:
+                cv2.circle(frame_resized, point, 4, (0, 255, 255), -1)
+
+        try:
+            frame_queue.put((video, frame_resized), block=False)
+        except multiprocessing.queues.Full:
+            pass
+
+    cap.release()
+
+
+def display_frames(frame_queue, stop_flag, processes):
+    global x
+    window_names = {}
+    while not stop_flag.is_set():
+        try:
+            if not frame_queue.empty():
+                camera_name, frame = frame_queue.get()
+                if camera_name not in window_names:
+                    window_names[camera_name] = f"ALKBR TESTING - {camera_name}"
+
+                cv2.imshow(window_names[camera_name], frame)
+                if x == 0:
+                    total_run_time = time.time() - start_time
+                    print(f"Waktu total menunggu window muncul: {total_run_time:.2f} detik")
+                    x = 1
+                if cv2.waitKey(1) & 0xFF == ord("n"):
+                    total_run_time = time.time() - start_time
+                    print(f"Waktu total dari start hingga 'n' ditekan: {total_run_time:.2f} detik")
+                    stop_flag.set()
+                    break
+            else:
+                time.sleep(0.01)
+        except KeyboardInterrupt:
+            stop_flag.set()
+            break
+
+    for process in processes:
+        process.join()
 
     cv2.destroyAllWindows()
 
@@ -115,7 +118,7 @@ def camera(name):
         "10.5.0.182": "182",
     }
     video = f"rtsp://admin:oracle2015@10.5.0.{configurations[name]}:554/Streaming/Channels/1"
-    return video, model_broom
+    return video
 
 
 def export_frame_broom(results, color, pairs, confidence_threshold=CONFIDENCE_THRESHOLD_BROOM):
@@ -152,20 +155,21 @@ def export_frame_broom(results, color, pairs, confidence_threshold=CONFIDENCE_TH
 
 if __name__ == "__main__":
     camera_names = ["10.5.0.161", "10.5.0.170", "10.5.0.182"]
-    frame_queue = queue.Queue(maxsize=20)
-    stop_flag = threading.Event()
-    threads = []
+    frame_queue = multiprocessing.Queue(maxsize=20)
+    stop_flag = multiprocessing.Event()
+    processes = []
 
-    # Membuat thread untuk pengambilan frame dan melakukan inferensi pada setiap kamera
+    # Create processes for each camera
     for camera_name in camera_names:
-        thread = threading.Thread(target=run_detection, args=(camera_name, frame_queue, stop_flag))
-        threads.append(thread)
-        thread.start()
+        video_path = camera(camera_name)
+        process = multiprocessing.Process(target=opencv_section, args=(video_path, frame_queue, stop_flag))
+        processes.append(process)
+        process.start()
 
-    # Mengelola display frame di thread utama
+    # Manage display frames in the main process
     try:
-        display_frames(frame_queue, stop_flag, threads)
+        display_frames(frame_queue, stop_flag, processes)
     finally:
         stop_flag.set()
-        for thread in threads:
-            thread.join()
+        for process in processes:
+            process.join()
