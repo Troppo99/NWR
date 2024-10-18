@@ -10,7 +10,7 @@ import cvzone
 import pymysql
 from datetime import datetime, timedelta
 import queue
-
+import threading
 
 class opencvSection:
     def __init__(self, video):
@@ -47,7 +47,7 @@ class yoloSection:
             results_broom = self.model_broom(frame, imgsz=960)
         return results_broom
 
-    def export_frame_broom(self, results, color, pairs, confidence_threshold=CONFIDENCE_THRESHOLD_BROOM):
+    def export_frame_broom(self, results, color, pairs, confidence_threshold=0.5):  # type: ignore
         points = []
         coords = []
         keypoint_positions = []
@@ -126,11 +126,31 @@ class serverSection:
             if "connection" in locals():
                 connection.close()
 
-def run_detection(video_path):
-    pass
 
-def thread_read_frame(video_path):
-    pass    
+def run_detection(camera_name, stop_flag=None):
+    video_path, _ = camera(camera_name)
+    frame_queue = queue.Queue(maxsize=10)
+    opencv = opencvSection(video_path)
+    cap = opencv.connect_to_stream()
+    thread = thread_read_frame(opencv, frame_queue, stop_flag)
+    while not stop_flag.is_set():
+        if not frame_queue.empty():
+            frame = frame_queue.get()
+            cv2.imshow(f"ALKBR TESTING - {camera_name}", frame)
+            key = cv2.waitKey(1) & 0xFF
+            if key == ord("n"):
+                break
+    cap.release()
+    cv2.destroyAllWindows()
+    thread.join()
+
+
+def thread_read_frame(opencv, frame_queue, stop_flag):
+    thread = threading.Thread(target=opencv.read_frame, args=(frame_queue, stop_flag))
+    thread.daemon = True
+    thread.start()
+    return thread
+
 
 def camera(name):
     configurations = {
@@ -138,6 +158,6 @@ def camera(name):
         "10.5.0.170": "170",
         "10.5.0.182": "182",
     }
-    video = f"rtsp://admin:robot123@10.5.0.{configurations[name][0]}/Streaming/Channels/1"
+    video = f"rtsp://admin:oracle2015@10.5.0.{configurations[name]}:554/Streaming/Channels/1"
     model = YOLO("broom5l.pt")
     return video, model
