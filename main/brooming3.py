@@ -367,8 +367,8 @@ if __name__ == "__main__":
     print(f"Model Broom device: {next(model_broom.model.parameters()).device}")
 
     # Definisikan Sumber Video
-    rtsp_url = "videos/test3.mp4"
-    # rtsp_url = "rtsp://admin:oracle2015@10.5.0.161:554/Streaming/Channels/1"
+    # rtsp_url = "videos/test3.mp4"
+    rtsp_url = "rtsp://admin:oracle2015@10.5.0.161:554/Streaming/Channels/1"
     cap = cv2.VideoCapture(rtsp_url)
     if not cap.isOpened():
         print(f"Error: Cannot open video {rtsp_url}")

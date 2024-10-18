@@ -86,6 +86,8 @@ def process_camera(camera_name, stop_flag):
     print(f"Model loaded for {camera_name} in {model_load_time:.2f} seconds")
 
     frame_count = 0
+    fps_frame_count = 0
+    fps_start_time = time.time()
 
     while not stop_flag.is_set():
         ret, frame = cap.read()
@@ -125,6 +127,15 @@ def process_camera(camera_name, stop_flag):
                 cv2.line(frame_resized, x1, y1, color, 2)
             for point in points:
                 cv2.circle(frame_resized, point, 4, (0, 255, 255), -1)
+
+        # FPS calculation
+        fps_frame_count += 1
+        elapsed_time = time.time() - fps_start_time
+        if elapsed_time >= 1.0:
+            fps = fps_frame_count / elapsed_time
+            print(f"FPS for {camera_name}: {fps:.2f}")
+            fps_frame_count = 0
+            fps_start_time = time.time()
 
         # Display the frame
         window_name = f"ALKBR TESTING - {camera_name}"
