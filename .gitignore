@@ -7,3 +7,4 @@ videos/*
 logs/*
 .idea/*
 main/logs/*
+*.pyc
