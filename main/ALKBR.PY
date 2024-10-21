@@ -424,6 +424,5 @@ class BroomDetector:
 
 
 if __name__ == "__main__":
-    # Default values; can be overridden when importing the module
     detector = BroomDetector()
     detector.run()
