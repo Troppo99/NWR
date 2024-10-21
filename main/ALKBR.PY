@@ -594,7 +594,7 @@ class BroomDetector:
                     offset=5,
                 )
                 cvzone.putTextRect(frame_resized, f"FPS: {int(self.fps)}", (10, 100), scale=1, thickness=2, offset=5)
-            cv2.imshow("Broom and Person Detection", frame_resized)
+            cv2.imshow(f"{self.camera_name}", frame_resized)
 
             if cv2.waitKey(1) & 0xFF == ord("n"):
                 break
