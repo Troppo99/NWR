@@ -633,6 +633,7 @@ class BroomDetector:
             cv2.imshow(f"{self.camera_name}", frame_resized)
 
             if cv2.waitKey(1) & 0xFF == ord("n"):
+                self.stop_event.set()
                 break
             elif cv2.waitKey(1) & 0xFF == ord("s"):
                 self.show_text = not self.show_text
