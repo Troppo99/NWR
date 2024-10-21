@@ -447,7 +447,7 @@ class BroomDetector:
                 if self.broom_absence_timer_start is None:
                     self.broom_absence_timer_start = current_time
                 elif (current_time - self.broom_absence_timer_start) >= self.BROOM_ABSENCE_THRESHOLD:
-                    print("Resetting borders")
+                    print(f"Resetting borders in percentage {percentage_green}")
                     if percentage_green >= self.PERCENTAGE_GREEN_THRESHOLD:
                         print(
                             f"Green border is bigger than {self.PERCENTAGE_GREEN_THRESHOLD}% and data is sent to server"
@@ -493,6 +493,45 @@ class BroomDetector:
             if self.is_counting:
                 self.first_green_time = None
                 self.is_counting = False
+
+        # **Add this block to check for 100% green percentage**
+        if percentage_green == 100:
+            print("Percentage green is 100%, performing immediate reset and data send.")
+            if self.first_green_time is not None:
+                self.elapsed_time = current_time - self.first_green_time
+            overlay = frame_resized.copy()
+            alpha = 0.5
+            for border_pt, color in zip(self.borders_pts, border_colors):
+                cv2.fillPoly(overlay, pts=[border_pt], color=color)
+            cv2.addWeighted(overlay, alpha, frame_resized, 1 - alpha, 0, frame_resized)
+            minutes, seconds = divmod(int(self.elapsed_time), 60)
+            time_str = f"Elapsed Time: {minutes:02d}:{seconds:02d}"
+            if self.show_text:
+                cvzone.putTextRect(frame_resized, time_str, (10, 100), scale=1, thickness=2, offset=5)
+                cvzone.putTextRect(
+                    frame_resized,
+                    f"Percentage of Green Border: {percentage_green:.2f}%",
+                    (10, 50),
+                    scale=1,
+                    thickness=2,
+                    offset=5,
+                )
+                cvzone.putTextRect(frame_resized, f"FPS: {int(self.fps)}", (10, 75), scale=1, thickness=2, offset=5)
+            image_path = "main/images/green_borders_image_182.jpg"
+            cv2.imwrite(image_path, frame_resized)
+            self.send_to_server("10.5.0.2", percentage_green, self.elapsed_time, image_path)
+
+            # Reset borders
+            for idx in range(len(self.borders)):
+                self.border_states[idx] = {
+                    "is_green": False,
+                    "broom_overlap_time": 0.0,
+                    "last_broom_overlap_time": None,
+                }
+                border_colors[idx] = (0, 255, 255)
+            self.first_green_time = None
+            self.is_counting = False
+            self.broom_absence_timer_start = None
 
         if points_broom and coords_broom:
             for x, y, color in coords_broom:
