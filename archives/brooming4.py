@@ -109,17 +109,11 @@ def export_frame_broom(results, color, pairs, confidence_threshold=CONFIDENCE_TH
 
     for result in results:
         keypoints_data = result.keypoints
-        if (
-            keypoints_data is not None
-            and keypoints_data.xy is not None
-            and keypoints_data.conf is not None
-        ):
+        if keypoints_data is not None and keypoints_data.xy is not None and keypoints_data.conf is not None:
             if keypoints_data.shape[0] > 0:
                 keypoints_array = keypoints_data.xy.cpu().numpy()  # shape (n, k, 2)
                 keypoints_conf = keypoints_data.conf.cpu().numpy()  # shape (n, k)
-                for keypoints_per_object, keypoints_conf_per_object in zip(
-                    keypoints_array, keypoints_conf
-                ):
+                for keypoints_per_object, keypoints_conf_per_object in zip(keypoints_array, keypoints_conf):
                     keypoints_list = []
                     for kp, kp_conf in zip(keypoints_per_object, keypoints_conf_per_object):
                         if kp_conf >= confidence_threshold:
@@ -150,9 +144,7 @@ def process_frame(frame, current_time, percentage_green):
     )
 
     # Inisialisasi warna border berdasarkan state sebelumnya
-    border_colors = [
-        (0, 255, 0) if state["is_green"] else (0, 255, 255) for state in border_states.values()
-    ]
+    border_colors = [(0, 255, 0) if state["is_green"] else (0, 255, 255) for state in border_states.values()]
 
     broom_overlapping_any_border = False
 
@@ -202,14 +194,10 @@ def process_frame(frame, current_time, percentage_green):
                 print("reset")
                 if percentage_green >= PERCENTAGE_GREEN_THRESHOLD:
                     # Simpan gambar sebelum reset terjadi
-                    print(
-                        f"Green border is bigger than {PERCENTAGE_GREEN_THRESHOLD}% and data is sent to server"
-                    )
+                    print(f"Green border is bigger than {PERCENTAGE_GREEN_THRESHOLD}% and data is sent to server")
                     # Pastikan gambar yang disimpan memiliki elemen border warna dan informasi tambahan
                     if first_green_time is not None:
-                        elapsed_time = (
-                            current_time - first_green_time
-                        )  # Update elapsed_time sebelum dikirim
+                        elapsed_time = current_time - first_green_time  # Update elapsed_time sebelum dikirim
                     overlay = frame_resized.copy()
                     alpha = 0.5  # Faktor Transparansi
                     for border_pt, color in zip(borders_pts, border_colors):
@@ -217,9 +205,7 @@ def process_frame(frame, current_time, percentage_green):
                     cv2.addWeighted(overlay, alpha, frame_resized, 1 - alpha, 0, frame_resized)
                     minutes, seconds = divmod(int(elapsed_time), 60)
                     time_str = f"Elapsed Time: {minutes:02d}:{seconds:02d}"
-                    cvzone.putTextRect(
-                        frame_resized, time_str, (10, 50), scale=1, thickness=2, offset=5
-                    )
+                    cvzone.putTextRect(frame_resized, time_str, (10, 50), scale=1, thickness=2, offset=5)
                     cvzone.putTextRect(
                         frame_resized,
                         f"Persentase Border Hijau: {percentage_green:.2f}%",
@@ -228,9 +214,7 @@ def process_frame(frame, current_time, percentage_green):
                         thickness=2,
                         offset=5,
                     )
-                    cvzone.putTextRect(
-                        frame_resized, f"FPS: {int(fps)}", (10, 100), scale=1, thickness=2, offset=5
-                    )
+                    cvzone.putTextRect(frame_resized, f"FPS: {int(fps)}", (10, 100), scale=1, thickness=2, offset=5)
                     image_path = "main/images/green_borders_image_161.jpg"
                     cv2.imwrite(image_path, frame_resized)
                     send_to_server("10.5.0.2", percentage_green, elapsed_time, image_path)
@@ -296,9 +280,7 @@ def server_address(host):
 def send_to_server(host, percentage_green, elapsed_time, image_path):
     try:
         user, password, database, port = server_address(host)
-        connection = pymysql.connect(
-            host=host, user=user, password=password, database=database, port=port
-        )
+        connection = pymysql.connect(host=host, user=user, password=password, database=database, port=port)
         cursor = connection.cursor()
         table = "empbro"
         camera_name = "10.5.0.110"
@@ -341,9 +323,7 @@ def send_to_server(host, percentage_green, elapsed_time, image_path):
 
 if __name__ == "__main__":
     # Muat hanya Model Deteksi Sapu
-    model_broom = YOLO("D:/SBHNL/Resources/Models/Pretrained/BROOM/B5_LARGE/weights/best.pt").to(
-        "cuda"
-    )  # Model Sapu
+    model_broom = YOLO("D:/SBHNL/Resources/Models/Pretrained/BROOM/B5_LARGE/weights/best.pt").to("cuda")  # Model Sapu
     model_broom.overrides["verbose"] = False
     # Verifikasi bahwa model berada di GPU
     print(f"Model Broom device: {next(model_broom.model.parameters()).device}")
@@ -403,9 +383,7 @@ if __name__ == "__main__":
             offset=5,
         )
         # Tampilkan Elapsed Time dan FPS
-        cvzone.putTextRect(
-            frame_resized, f"FPS: {int(fps)}", (10, 100), scale=1, thickness=2, offset=5
-        )
+        cvzone.putTextRect(frame_resized, f"FPS: {int(fps)}", (10, 100), scale=1, thickness=2, offset=5)
         cv2.imshow("Broom and Person Detection", frame_resized)
 
         # Tekan 'n' untuk keluar

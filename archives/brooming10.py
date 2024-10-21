@@ -26,33 +26,36 @@ scale_y = new_height / original_height
 
 # Mendefinisikan Borders (koordinat sudah sesuai dengan resolusi 1280x720)
 borders = [
-    [(713, 41), (664, 44), (671, 90), (731, 87)],
-    [(664, 44), (602, 48), (597, 95), (671, 90)],
-    [(534, 49), (602, 48), (597, 95), (515, 103)],
-    [(515, 103), (597, 95), (592, 149), (488, 157)],
-    [(592, 149), (597, 95), (671, 90), (677, 144)],
-    [(731, 87), (671, 90), (677, 144), (752, 143)],
-    [(488, 157), (592, 149), (581, 213), (464, 221)],
-    [(581, 213), (592, 149), (677, 144), (687, 206)],
-    [(752, 143), (677, 144), (687, 206), (778, 201)],
-    [(464, 221), (581, 213), (575, 273), (443, 282)],
-    [(575, 273), (581, 213), (687, 206), (698, 269)],
-    [(778, 201), (687, 206), (698, 269), (799, 262)],
-    [(443, 282), (575, 273), (568, 361), (416, 370)],
-    [(568, 361), (575, 273), (698, 269), (708, 352)],
-    [(799, 262), (698, 269), (708, 352), (826, 346)],
-    [(416, 370), (568, 361), (558, 454), (384, 458)],
-    [(558, 454), (568, 361), (708, 352), (721, 450)],
-    [(826, 346), (708, 352), (721, 450), (854, 441)],
-    [(384, 458), (558, 454), (549, 552), (358, 554)],
-    [(549, 552), (558, 454), (721, 450), (735, 551)],
-    [(854, 441), (721, 450), (735, 551), (886, 539)],
-    [(358, 554), (549, 552), (546, 638), (337, 637)],
-    [(546, 638), (549, 552), (735, 551), (744, 634)],
-    [(886, 539), (735, 551), (744, 634), (902, 621)],
-    [(337, 637), (546, 638), (539, 712), (321, 713)],
-    [(539, 712), (546, 638), (744, 634), (751, 713)],
-    [(902, 621), (744, 634), (751, 713), (922, 713)],
+    [(608, 12), (665, 12), (662, 46), (592, 47)],
+    [(665, 12), (726, 13), (731, 48), (662, 46)],
+    [(777, 10), (726, 13), (731, 48), (794, 49)],
+    [(592, 47), (662, 46), (658, 79), (579, 81)],
+    [(731, 48), (662, 46), (658, 79), (735, 79)],
+    [(731, 48), (735, 79), (806, 83), (794, 49)],
+    [(579, 81), (658, 79), (654, 120), (568, 118)],
+    [(654, 120), (658, 79), (735, 79), (740, 121)],
+    [(806, 83), (735, 79), (740, 121), (822, 121)],
+    [(568, 118), (654, 120), (651, 166), (572, 163)],
+    [(651, 166), (654, 120), (740, 121), (743, 165)],
+    [(822, 121), (740, 121), (743, 165), (842, 165)],
+    [(572, 163), (651, 166), (645, 223), (553, 226)],
+    [(645, 223), (651, 166), (743, 165), (747, 223)],
+    [(842, 165), (743, 165), (747, 223), (863, 227)],
+    [(553, 226), (645, 223), (639, 297), (506, 296), (524, 243)],
+    [(639, 297), (645, 223), (747, 223), (752, 296)],
+    [(752, 296), (747, 223), (863, 227), (886, 299)],
+    [(506, 296), (639, 297), (634, 372), (481, 373)],
+    [(634, 372), (639, 297), (752, 296), (758, 375)],
+    [(758, 375), (752, 296), (886, 299), (909, 380)],
+    [(481, 373), (634, 372), (625, 461), (457, 454)],
+    [(625, 461), (634, 372), (758, 375), (765, 464)],
+    [(765, 464), (758, 375), (909, 380), (933, 463)],
+    [(457, 454), (625, 461), (614, 583), (423, 574)],
+    [(614, 583), (625, 461), (765, 464), (766, 583)],
+    [(933, 463), (765, 464), (766, 583), (966, 575)],
+    [(423, 574), (614, 583), (603, 710), (395, 710)],
+    [(603, 710), (614, 583), (766, 583), (767, 708)],
+    [(767, 708), (766, 583), (966, 575), (989, 706)],
 ]
 # Skalakan Borders sesuai dengan resolusi baru
 scaled_borders = []
@@ -98,7 +101,7 @@ first_green_time = None
 is_counting = False
 
 # Definisikan variabel global camera_name
-camera_name = "10.5.0.180"
+camera_name = "10.5.0.201"
 
 
 # Fungsi untuk Memproses Deteksi Sapu
@@ -116,17 +119,11 @@ def export_frame_broom(results, color, pairs, confidence_threshold=CONFIDENCE_TH
 
     for result in results:
         keypoints_data = result.keypoints
-        if (
-            keypoints_data is not None
-            and keypoints_data.xy is not None
-            and keypoints_data.conf is not None
-        ):
+        if keypoints_data is not None and keypoints_data.xy is not None and keypoints_data.conf is not None:
             if keypoints_data.shape[0] > 0:
                 keypoints_array = keypoints_data.xy.cpu().numpy()  # shape (n, k, 2)
                 keypoints_conf = keypoints_data.conf.cpu().numpy()  # shape (n, k)
-                for keypoints_per_object, keypoints_conf_per_object in zip(
-                    keypoints_array, keypoints_conf
-                ):
+                for keypoints_per_object, keypoints_conf_per_object in zip(keypoints_array, keypoints_conf):
                     keypoints_list = []
                     for kp, kp_conf in zip(keypoints_per_object, keypoints_conf_per_object):
                         if kp_conf >= confidence_threshold:
@@ -157,9 +154,7 @@ def process_frame(frame, current_time, percentage_green):
     )
 
     # Inisialisasi warna border berdasarkan state sebelumnya
-    border_colors = [
-        (0, 255, 0) if state["is_green"] else (0, 255, 255) for state in border_states.values()
-    ]
+    border_colors = [(0, 255, 0) if state["is_green"] else (0, 255, 255) for state in border_states.values()]
 
     broom_overlapping_any_border = False
 
@@ -209,14 +204,10 @@ def process_frame(frame, current_time, percentage_green):
                 print("reset")
                 if percentage_green >= PERCENTAGE_GREEN_THRESHOLD:
                     # Simpan gambar sebelum reset terjadi
-                    print(
-                        f"Green border is bigger than {PERCENTAGE_GREEN_THRESHOLD}% and data is sent to server"
-                    )
+                    print(f"Green border is bigger than {PERCENTAGE_GREEN_THRESHOLD}% and data is sent to server")
                     # Pastikan gambar yang disimpan memiliki elemen border warna dan informasi tambahan
                     if first_green_time is not None:
-                        elapsed_time = (
-                            current_time - first_green_time
-                        )  # Update elapsed_time sebelum dikirim
+                        elapsed_time = current_time - first_green_time  # Update elapsed_time sebelum dikirim
                     overlay = frame_resized.copy()
                     alpha = 0.5  # Faktor Transparansi
                     for border_pt, color in zip(borders_pts, border_colors):
@@ -224,9 +215,7 @@ def process_frame(frame, current_time, percentage_green):
                     cv2.addWeighted(overlay, alpha, frame_resized, 1 - alpha, 0, frame_resized)
                     minutes, seconds = divmod(int(elapsed_time), 60)
                     time_str = f"Elapsed Time: {minutes:02d}:{seconds:02d}"
-                    cvzone.putTextRect(
-                        frame_resized, time_str, (10, 50), scale=1, thickness=2, offset=5
-                    )
+                    cvzone.putTextRect(frame_resized, time_str, (10, 50), scale=1, thickness=2, offset=5)
                     cvzone.putTextRect(
                         frame_resized,
                         f"Persentase Border Hijau: {percentage_green:.2f}%",
@@ -235,9 +224,7 @@ def process_frame(frame, current_time, percentage_green):
                         thickness=2,
                         offset=5,
                     )
-                    cvzone.putTextRect(
-                        frame_resized, f"FPS: {int(fps)}", (10, 100), scale=1, thickness=2, offset=5
-                    )
+                    cvzone.putTextRect(frame_resized, f"FPS: {int(fps)}", (10, 100), scale=1, thickness=2, offset=5)
                     image_path = "main/images/green_borders_image_161.jpg"
                     cv2.imwrite(image_path, frame_resized)
                     send_to_server("10.5.0.2", percentage_green, elapsed_time, image_path)
@@ -304,9 +291,7 @@ def send_to_server(host, percentage_green, elapsed_time, image_path):
     global camera_name
     try:
         user, password, database, port = server_address(host)
-        connection = pymysql.connect(
-            host=host, user=user, password=password, database=database, port=port
-        )
+        connection = pymysql.connect(host=host, user=user, password=password, database=database, port=port)
         cursor = connection.cursor()
         table = "empbro"
         # Hapus inisialisasi ulang camera_name di sini
@@ -350,9 +335,7 @@ def send_to_server(host, percentage_green, elapsed_time, image_path):
 
 if __name__ == "__main__":
     # Muat hanya Model Deteksi Sapu
-    model_broom = YOLO("D:/SBHNL/Resources/Models/Pretrained/BROOM/B5_LARGE/weights/best.pt").to(
-        "cuda"
-    )  # Model Sapu
+    model_broom = YOLO("D:/SBHNL/Resources/Models/Pretrained/BROOM/B5_LARGE/weights/best.pt").to("cuda")  # Model Sapu
     model_broom.overrides["verbose"] = False
     # Verifikasi bahwa model berada di GPU
     print(f"Model Broom device: {next(model_broom.model.parameters()).device}")
@@ -412,9 +395,7 @@ if __name__ == "__main__":
             offset=5,
         )
         # Tampilkan Elapsed Time dan FPS
-        cvzone.putTextRect(
-            frame_resized, f"FPS: {int(fps)}", (10, 100), scale=1, thickness=2, offset=5
-        )
+        cvzone.putTextRect(frame_resized, f"FPS: {int(fps)}", (10, 100), scale=1, thickness=2, offset=5)
         cv2.imshow("Broom and Person Detection", frame_resized)
 
         # Tekan 'n' untuk keluar
