@@ -38,6 +38,7 @@ class BroomDetector:
         self.camera_name = camera_name
         self.rtsp_url = f"rtsp://admin:oracle2015@{camera_name}:554/Streaming/Channels/1"
         self.borders = self.camera_config(camera_name)
+        self.show_text = True
 
         for border in self.borders:
             scaled_border = []
@@ -445,18 +446,19 @@ class BroomDetector:
                         cv2.addWeighted(overlay, alpha, frame_resized, 1 - alpha, 0, frame_resized)
                         minutes, seconds = divmod(int(self.elapsed_time), 60)
                         time_str = f"Elapsed Time: {minutes:02d}:{seconds:02d}"
-                        cvzone.putTextRect(frame_resized, time_str, (10, 50), scale=1, thickness=2, offset=5)
-                        cvzone.putTextRect(
-                            frame_resized,
-                            f"Persentase Border Hijau: {percentage_green:.2f}%",
-                            (10, 75),
-                            scale=1,
-                            thickness=2,
-                            offset=5,
-                        )
-                        cvzone.putTextRect(
-                            frame_resized, f"FPS: {int(self.fps)}", (10, 100), scale=1, thickness=2, offset=5
-                        )
+                        if self.show_text:
+                            cvzone.putTextRect(frame_resized, time_str, (10, 50), scale=1, thickness=2, offset=5)
+                            cvzone.putTextRect(
+                                frame_resized,
+                                f"Persentase Border Hijau: {percentage_green:.2f}%",
+                                (10, 75),
+                                scale=1,
+                                thickness=2,
+                                offset=5,
+                            )
+                            cvzone.putTextRect(
+                                frame_resized, f"FPS: {int(self.fps)}", (10, 100), scale=1, thickness=2, offset=5
+                            )
                         image_path = "main/images/green_borders_image_182.jpg"
                         cv2.imwrite(image_path, frame_resized)
                         self.send_to_server("10.5.0.2", percentage_green, self.elapsed_time, image_path)
@@ -495,7 +497,8 @@ class BroomDetector:
             self.elapsed_time = current_time - self.first_green_time
             minutes, seconds = divmod(int(self.elapsed_time), 60)
             time_str = f"Elapsed Time: {minutes:02d}:{seconds:02d}"
-            cvzone.putTextRect(frame_resized, time_str, (10, 50), scale=1, thickness=2, offset=5)
+            if self.show_text:
+                cvzone.putTextRect(frame_resized, time_str, (10, 50), scale=1, thickness=2, offset=5)
 
         return frame_resized
 
@@ -581,20 +584,22 @@ class BroomDetector:
             green_borders = sum(1 for state in self.border_states.values() if state["is_green"])
             percentage_green = (green_borders / total_borders) * 100
             frame_resized = self.process_frame(frame, current_time, percentage_green, pairs_broom)
-            cvzone.putTextRect(
-                frame_resized,
-                f"Persentase Border Hijau: {percentage_green:.2f}%",
-                (10, 75),
-                scale=1,
-                thickness=2,
-                offset=5,
-            )
-            cvzone.putTextRect(frame_resized, f"FPS: {int(self.fps)}", (10, 100), scale=1, thickness=2, offset=5)
+            if self.show_text:
+                cvzone.putTextRect(
+                    frame_resized,
+                    f"Persentase Border Hijau: {percentage_green:.2f}%",
+                    (10, 75),
+                    scale=1,
+                    thickness=2,
+                    offset=5,
+                )
+                cvzone.putTextRect(frame_resized, f"FPS: {int(self.fps)}", (10, 100), scale=1, thickness=2, offset=5)
             cv2.imshow("Broom and Person Detection", frame_resized)
 
             if cv2.waitKey(1) & 0xFF == ord("n"):
                 break
-
+            elif cv2.waitKey(1) & 0xFF == ord("s"):
+                self.show_text = not self.show_text
         cap.release()
         cv2.destroyAllWindows()
 
