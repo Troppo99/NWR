@@ -468,17 +468,17 @@ class BroomDetector:
                         minutes, seconds = divmod(int(self.elapsed_time), 60)
                         time_str = f"Elapsed Time: {minutes:02d}:{seconds:02d}"
                         if self.show_text:
-                            cvzone.putTextRect(frame_resized, time_str, (10, 50), scale=1, thickness=2, offset=5)
+                            cvzone.putTextRect(frame_resized, time_str, (10, 100), scale=1, thickness=2, offset=5)
                             cvzone.putTextRect(
                                 frame_resized,
-                                f"Persentase Border Hijau: {percentage_green:.2f}%",
-                                (10, 75),
+                                f"Percentage of Green Border: {percentage_green:.2f}%",
+                                (10, 50),
                                 scale=1,
                                 thickness=2,
                                 offset=5,
                             )
                             cvzone.putTextRect(
-                                frame_resized, f"FPS: {int(self.fps)}", (10, 100), scale=1, thickness=2, offset=5
+                                frame_resized, f"FPS: {int(self.fps)}", (10, 75), scale=1, thickness=2, offset=5
                             )
                         image_path = "main/images/green_borders_image_182.jpg"
                         cv2.imwrite(image_path, frame_resized)
@@ -519,7 +519,7 @@ class BroomDetector:
             minutes, seconds = divmod(int(self.elapsed_time), 60)
             time_str = f"Elapsed Time: {minutes:02d}:{seconds:02d}"
             if self.show_text:
-                cvzone.putTextRect(frame_resized, time_str, (10, 50), scale=1, thickness=2, offset=5)
+                cvzone.putTextRect(frame_resized, time_str, (10, 100), scale=1, thickness=2, offset=5)
 
         return frame_resized
 
@@ -639,13 +639,13 @@ class BroomDetector:
             if self.show_text:
                 cvzone.putTextRect(
                     frame_resized,
-                    f"Persentase Border Hijau: {percentage_green:.2f}%",
-                    (10, 75),
+                    f"Percentage of Green Border: {percentage_green:.2f}%",
+                    (10, 50),
                     scale=1,
                     thickness=2,
                     offset=5,
                 )
-                cvzone.putTextRect(frame_resized, f"FPS: {int(self.fps)}", (10, 100), scale=1, thickness=2, offset=5)
+                cvzone.putTextRect(frame_resized, f"FPS: {int(self.fps)}", (10, 75), scale=1, thickness=2, offset=5)
             cv2.imshow(f"RUN{self.idx} : {self.camera_name}", frame_resized)
 
             if cv2.waitKey(1) & 0xFF == ord("n"):
@@ -662,6 +662,7 @@ if __name__ == "__main__":
         BROOM_TOUCH_THRESHOLD=0,
         PERCENTAGE_GREEN_THRESHOLD=50,
         camera_name="10.5.0.182",
+        new_size=(960, 540),
     )
 
     detector.run()
