@@ -23,7 +23,7 @@ class BroomDetector:
         self.BROOM_ABSENCE_THRESHOLD = BROOM_ABSENCE_THRESHOLD
         self.BROOM_TOUCH_THRESHOLD = BROOM_TOUCH_THRESHOLD
         self.PERCENTAGE_GREEN_THRESHOLD = PERCENTAGE_GREEN_THRESHOLD
-        self.new_width, self.new_height = 960, 540
+        self.new_width, self.new_height = 360, 202
         self.scale_x = self.new_width / 1280
         self.scale_y = self.new_height / 720
         self.scaled_borders = []
