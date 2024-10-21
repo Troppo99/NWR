@@ -350,18 +350,8 @@ class BroomDetector:
                 [(767, 708), (766, 583), (966, 575), (989, 706)],
             ],
         }
-        indices = {
-            "10.5.0.182": 1,
-            "10.5.0.170": 2,
-            "10.5.0.161": 3,
-            "10.5.0.110": 4,
-            "10.5.0.180": 5,
-            "10.5.0.185": 6,
-            "10.5.0.146": 7,
-            "10.5.0.183": 8,
-            "10.5.0.195": 9,
-            "10.5.0.201": 10,
-        }
+        camera_names = list(config.keys())
+        indices = {name: idx + 1 for idx, name in enumerate(camera_names)}
         return config[camera_name], indices[camera_name]
 
     def process_model_broom(self, frame):
