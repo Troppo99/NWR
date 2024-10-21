@@ -9,6 +9,8 @@ import torch
 import cvzone
 import pymysql
 from datetime import datetime, timedelta
+import threading
+import queue
 
 
 class BroomDetector:
@@ -39,6 +41,9 @@ class BroomDetector:
         self.rtsp_url = f"rtsp://admin:oracle2015@{camera_name}:554/Streaming/Channels/1"
         self.borders = self.camera_config(camera_name)
         self.show_text = True
+        self.frame_queue = queue.Queue(maxsize=10)
+        self.stop_event = threading.Event()
+        self.frame_thread = None
 
         for border in self.borders:
             scaled_border = []
@@ -556,18 +561,49 @@ class BroomDetector:
             if "connection" in locals():
                 connection.close()
 
-    def run(self):
+    def frame_capture(self):
         rtsp_url = self.rtsp_url
-        cap = cv2.VideoCapture(rtsp_url)
+        while not self.stop_event.is_set():
+            cap = cv2.VideoCapture(rtsp_url)
+            if not cap.isOpened():
+                print("Failed to open stream. Retrying in 5 seconds...")
+                cap.release()
+                time.sleep(5)
+                continue
+
+            while not self.stop_event.is_set():
+                ret, frame = cap.read()
+                if not ret:
+                    print("Failed to read frame. Reconnecting in 5 seconds...")
+                    cap.release()
+                    time.sleep(5)
+                    break  # Break inner loop to reconnect
+
+                try:
+                    self.frame_queue.put(frame, timeout=1)
+                except queue.Full:
+                    pass  # Skip if queue is full
+
+            cap.release()
+
+    def run(self):
         pairs_broom = [(0, 1), (1, 2), (2, 3), (2, 4)]
-        frame_count = 0
         process_every_n_frames = 2
+        frame_count = 0
+
+        self.frame_thread = threading.Thread(target=self.frame_capture)
+        self.frame_thread.daemon = True
+        self.frame_thread.start()
 
         while True:
-            ret, frame = cap.read()
-            if not ret:
-                print("Failed to read frame")
+            if self.stop_event.is_set():
                 break
+
+            try:
+                frame = self.frame_queue.get(timeout=5)
+            except queue.Empty:
+                print("No frame received in the last 5 seconds.")
+                continue
 
             frame_count += 1
             if frame_count % process_every_n_frames != 0:
@@ -600,10 +636,15 @@ class BroomDetector:
                 break
             elif cv2.waitKey(1) & 0xFF == ord("s"):
                 self.show_text = not self.show_text
-        cap.release()
         cv2.destroyAllWindows()
-
+        self.frame_thread.join()
 
 if __name__ == "__main__":
-    detector = BroomDetector()
+    detector = BroomDetector(
+        BROOM_ABSENCE_THRESHOLD=10,
+        BROOM_TOUCH_THRESHOLD=0,
+        PERCENTAGE_GREEN_THRESHOLD=50,
+        camera_name="10.5.0.182",
+    )
+
     detector.run()
