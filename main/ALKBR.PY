@@ -21,6 +21,7 @@ class BroomDetector:
         PERCENTAGE_GREEN_THRESHOLD=50,
         camera_name=None,
         new_size=None,
+        rtsp_url=None,
     ):
         self.CONFIDENCE_THRESHOLD_BROOM = 0.9
         self.BROOM_ABSENCE_THRESHOLD = BROOM_ABSENCE_THRESHOLD
@@ -42,7 +43,10 @@ class BroomDetector:
         self.first_green_time = None
         self.is_counting = False
         self.camera_name = camera_name
-        self.rtsp_url = f"rtsp://admin:oracle2015@{camera_name}:554/Streaming/Channels/1"
+        if rtsp_url is None:
+            self.rtsp_url = f"rtsp://admin:oracle2015@{camera_name}:554/Streaming/Channels/1"
+        else:
+            self.rtsp_url = rtsp_url
         self.borders, self.idx = self.camera_config(camera_name)
         self.show_text = True
         self.frame_queue = queue.Queue(maxsize=10)
@@ -603,8 +607,7 @@ class BroomDetector:
 
         window_name = f"RUN{self.idx} : {self.camera_name}"
         cv2.namedWindow(window_name, cv2.WINDOW_NORMAL)
-        cv2.resizeWindow(window_name, self.new_width, self.new_height) 
-
+        cv2.resizeWindow(window_name, self.new_width, self.new_height)
 
         while True:
             if self.stop_event.is_set():
@@ -651,6 +654,7 @@ class BroomDetector:
         cv2.destroyAllWindows()
         self.frame_thread.join()
 
+
 if __name__ == "__main__":
     detector = BroomDetector(
         BROOM_ABSENCE_THRESHOLD=10,
@@ -658,6 +662,7 @@ if __name__ == "__main__":
         PERCENTAGE_GREEN_THRESHOLD=50,
         camera_name="10.5.0.182",
         new_size=(960, 540),
+        rtsp_url="D:/NWR/videos/test1.mp4",
     )
 
     detector.run()
