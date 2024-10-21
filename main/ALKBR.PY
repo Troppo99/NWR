@@ -611,6 +611,11 @@ class BroomDetector:
         self.frame_thread.daemon = True
         self.frame_thread.start()
 
+        window_name = f"RUN{self.idx} : {self.camera_name}"
+        cv2.namedWindow(window_name, cv2.WINDOW_NORMAL)
+        cv2.resizeWindow(window_name, self.new_width, self.new_height) 
+
+
         while True:
             if self.stop_event.is_set():
                 break
@@ -646,7 +651,7 @@ class BroomDetector:
                     offset=5,
                 )
                 cvzone.putTextRect(frame_resized, f"FPS: {int(self.fps)}", (10, 75), scale=1, thickness=2, offset=5)
-            cv2.imshow(f"RUN{self.idx} : {self.camera_name}", frame_resized)
+            cv2.imshow(window_name, frame_resized)
 
             if cv2.waitKey(1) & 0xFF == ord("n"):
                 self.stop_event.set()
