@@ -494,7 +494,6 @@ class BroomDetector:
                 self.first_green_time = None
                 self.is_counting = False
 
-        # **Add this block to check for 100% green percentage**
         if percentage_green == 100:
             print("Percentage green is 100%, performing immediate reset and data send.")
             if self.first_green_time is not None:
@@ -521,7 +520,6 @@ class BroomDetector:
             cv2.imwrite(image_path, frame_resized)
             self.send_to_server("10.5.0.2", percentage_green, self.elapsed_time, image_path)
 
-            # Reset borders
             for idx in range(len(self.borders)):
                 self.border_states[idx] = {
                     "is_green": False,
@@ -626,12 +624,12 @@ class BroomDetector:
                     print("Failed to read frame. Reconnecting in 5 seconds...")
                     cap.release()
                     time.sleep(5)
-                    break  # Break inner loop to reconnect
+                    break
 
                 try:
                     self.frame_queue.put(frame, timeout=1)
                 except queue.Full:
-                    pass  # Skip if queue is full
+                    pass
 
             cap.release()
 
