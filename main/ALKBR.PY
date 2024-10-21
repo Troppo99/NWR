@@ -20,12 +20,16 @@ class BroomDetector:
         BROOM_TOUCH_THRESHOLD=0,
         PERCENTAGE_GREEN_THRESHOLD=50,
         camera_name=None,
+        new_size=None,
     ):
         self.CONFIDENCE_THRESHOLD_BROOM = 0.9
         self.BROOM_ABSENCE_THRESHOLD = BROOM_ABSENCE_THRESHOLD
         self.BROOM_TOUCH_THRESHOLD = BROOM_TOUCH_THRESHOLD
         self.PERCENTAGE_GREEN_THRESHOLD = PERCENTAGE_GREEN_THRESHOLD
-        self.new_width, self.new_height = 360, 202
+        if new_size is None:
+            self.new_width, self.new_height = 360, 202
+        else:
+            self.new_width, self.new_height = new_size
         self.scale_x = self.new_width / 1280
         self.scale_y = self.new_height / 720
         self.scaled_borders = []
