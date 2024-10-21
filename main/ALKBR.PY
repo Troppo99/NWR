@@ -43,7 +43,7 @@ class BroomDetector:
         self.is_counting = False
         self.camera_name = camera_name
         self.rtsp_url = f"rtsp://admin:oracle2015@{camera_name}:554/Streaming/Channels/1"
-        self.borders = self.camera_config(camera_name)
+        self.borders, self.idx = self.camera_config(camera_name)
         self.show_text = True
         self.frame_queue = queue.Queue(maxsize=10)
         self.stop_event = threading.Event()
@@ -350,7 +350,19 @@ class BroomDetector:
                 [(767, 708), (766, 583), (966, 575), (989, 706)],
             ],
         }
-        return config[camera_name]
+        indices = {
+            "10.5.0.182": 1,
+            "10.5.0.170": 2,
+            "10.5.0.161": 3,
+            "10.5.0.110": 4,
+            "10.5.0.180": 5,
+            "10.5.0.185": 6,
+            "10.5.0.146": 7,
+            "10.5.0.183": 8,
+            "10.5.0.195": 9,
+            "10.5.0.201": 10,
+        }
+        return config[camera_name], indices[camera_name]
 
     def process_model_broom(self, frame):
         with torch.no_grad():
@@ -634,7 +646,7 @@ class BroomDetector:
                     offset=5,
                 )
                 cvzone.putTextRect(frame_resized, f"FPS: {int(self.fps)}", (10, 100), scale=1, thickness=2, offset=5)
-            cv2.imshow(f"{self.camera_name}", frame_resized)
+            cv2.imshow(f"RUN{self.idx} : {self.camera_name}", frame_resized)
 
             if cv2.waitKey(1) & 0xFF == ord("n"):
                 self.stop_event.set()
