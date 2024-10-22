@@ -11,12 +11,13 @@ import numpy as np
 
 stop_flag = False
 borders = [[(48, 341), (77, 334), (70, 302), (41, 310)], [(77, 334), (108, 326), (101, 292), (70, 302)], [(108, 326), (141, 320), (133, 283), (101, 292)]]
-borders_pts = [np.array(border, np.int32) for border in borders]
+
 
 def process_model(frame):
     with torch.no_grad():
         results = model(frame, stream=True, imgsz=960)
     return results
+
 
 def read_frames(cap, frame_queue):
     global stop_flag
@@ -32,52 +33,53 @@ def read_frames(cap, frame_queue):
         time.sleep(0.01)
 
 
-def draw_pose(frame, keypoint_coords, pairs, green_pairs, blue_pairs, pink_pairs, orange_pairs):
+def draw_pose(frame, keypoint_coords, pairs, green_pairs, blue_pairs, pink_pairs, orange_pairs, scaled_borders_pts, border_states):
     for i, coord in enumerate(keypoint_coords):
         if coord:
             x, y = coord
             if i == 9:
-                # Memperpanjang posisi keypoint 9
                 kp7 = keypoint_coords[7]
                 kp9 = keypoint_coords[9]
                 if kp7 and kp9:
-                    # Hitung vektor arah dari keypoint 7 ke 9
                     vx = kp9[0] - kp7[0]
                     vy = kp9[1] - kp7[1]
-                    # Normalisasi vektor
                     norm = (vx**2 + vy**2) ** 0.5
                     if norm != 0:
                         vx /= norm
                         vy /= norm
-                        # Perpanjang vektor
-                        extension_length = 50  # Jarak perpanjangan
+                        extension_length = 50
                         x_new = int(kp9[0] + vx * extension_length)
                         y_new = int(kp9[1] + vy * extension_length)
                         x, y = x_new, y_new
                 radius = 30
+                point = (x, y)
+                for idx, border in enumerate(scaled_borders_pts):
+                    if cv2.pointPolygonTest(border, point, False) >= 0:
+                        border_states[idx] = True
+                cv2.circle(frame, (x, y), radius, (0, 255, 255), -1)
             elif i == 10:
-                # Memperpanjang posisi keypoint 10
                 kp8 = keypoint_coords[8]
                 kp10 = keypoint_coords[10]
                 if kp8 and kp10:
-                    # Hitung vektor arah dari keypoint 8 ke 10
                     vx = kp10[0] - kp8[0]
                     vy = kp10[1] - kp8[1]
-                    # Normalisasi vektor
                     norm = (vx**2 + vy**2) ** 0.5
                     if norm != 0:
                         vx /= norm
                         vy /= norm
-                        # Perpanjang vektor
-                        extension_length = 50  # Jarak perpanjangan
+                        extension_length = 50
                         x_new = int(kp10[0] + vx * extension_length)
                         y_new = int(kp10[1] + vy * extension_length)
                         x, y = x_new, y_new
                 radius = 30
+                point = (x, y)
+                for idx, border in enumerate(scaled_borders_pts):
+                    if cv2.pointPolygonTest(border, point, False) >= 0:
+                        border_states[idx] = True
+                cv2.circle(frame, (x, y), radius, (0, 255, 255), -1)
             else:
                 radius = 5
-            cv2.circle(frame, (x, y), radius, (0, 255, 255), -1)
-    # Gambar garis antar keypoint seperti biasa
+                cv2.circle(frame, (x, y), radius, (0, 255, 255), -1)
     for i, j in pairs:
         if keypoint_coords[i] and keypoint_coords[j]:
             if (i, j) in green_pairs or (j, i) in green_pairs:
@@ -102,9 +104,25 @@ def process_frames(frame_queue):
     orange_pairs = {(14, 16), (12, 14), (11, 13), (13, 15)}
 
     border_states = [False] * len(borders)
+    first_frame = True
     while not stop_flag:
         if not frame_queue.empty():
             frame = frame_queue.get()
+
+            if first_frame:
+                height, width, _ = frame.shape
+                scale_x = width / 1280
+                scale_y = height / 720
+                scaled_borders_pts = []
+                for border in borders:
+                    scaled_border = []
+                    for x, y in border:
+                        scaled_x = int(x * scale_x)
+                        scaled_y = int(y * scale_y)
+                        scaled_border.append((scaled_x, scaled_y))
+                    scaled_borders_pts.append(np.array(scaled_border, np.int32))
+                first_frame = False
+
             results = process_model(frame)
 
             for result in results:
@@ -112,20 +130,22 @@ def process_frames(frame_queue):
 
                 for keypoints in keypoints_data:
                     keypoint_coords = [(int(x), int(y)) if confidence > 0.5 else None for x, y, confidence in keypoints]
-                    draw_pose(frame, keypoint_coords, pairs, green_pairs, blue_pairs, pink_pairs, orange_pairs)
+                    draw_pose(frame, keypoint_coords, pairs, green_pairs, blue_pairs, pink_pairs, orange_pairs, scaled_borders_pts, border_states)
 
             overlay = frame.copy()
             alpha = 0.5
-            for idx, border in enumerate(borders_pts):
+            for idx, border in enumerate(scaled_borders_pts):
                 if border_states[idx]:
                     color = (0, 255, 0)
                 else:
-                    color = (0, 0, 0)
-                cv2.polylines(overlay, [border], isClosed=True, color=color, thickness=2)
+                    color = (0, 255, 255)
+                cv2.fillPoly(overlay, [border], color)
             cv2.addWeighted(overlay, alpha, frame, 1 - alpha, 0, frame)
+
             border_states = [False] * len(borders)
+
             frame_show = cv2.resize(frame, (1280, 720))
-            cv2.imshow("THREADPOOL EXECUTOR - Pose Detection", frame_show)
+            cv2.imshow("THREADPOOL EXECUTOR - Pose Detection with Borders", frame_show)
 
             if cv2.waitKey(1) & 0xFF == ord("n"):
                 print("Keluar dari aplikasi.")
