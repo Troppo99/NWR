@@ -1,14 +1,22 @@
 import os
 
 os.environ["KMP_DUPLICATE_LIB_OK"] = "True"
+import torch
 import cv2
 from ultralytics import YOLO
 from concurrent.futures import ThreadPoolExecutor
 import queue
 import time
+import numpy as np
 
 stop_flag = False
+borders = [[(48, 341), (77, 334), (70, 302), (41, 310)], [(77, 334), (108, 326), (101, 292), (70, 302)], [(108, 326), (141, 320), (133, 283), (101, 292)]]
+borders_pts = [np.array(border, np.int32) for border in borders]
 
+def process_model(frame):
+    with torch.no_grad():
+        results = model(frame, stream=True, imgsz=960)
+    return results
 
 def read_frames(cap, frame_queue):
     global stop_flag
@@ -93,10 +101,11 @@ def process_frames(frame_queue):
     pink_pairs = {(6, 12), (11, 12), (5, 11)}
     orange_pairs = {(14, 16), (12, 14), (11, 13), (13, 15)}
 
+    border_states = [False] * len(borders)
     while not stop_flag:
         if not frame_queue.empty():
             frame = frame_queue.get()
-            results = model(frame, stream=True)
+            results = process_model(frame)
 
             for result in results:
                 keypoints_data = result.keypoints.data
@@ -105,6 +114,16 @@ def process_frames(frame_queue):
                     keypoint_coords = [(int(x), int(y)) if confidence > 0.5 else None for x, y, confidence in keypoints]
                     draw_pose(frame, keypoint_coords, pairs, green_pairs, blue_pairs, pink_pairs, orange_pairs)
 
+            overlay = frame.copy()
+            alpha = 0.5
+            for idx, border in enumerate(borders_pts):
+                if border_states[idx]:
+                    color = (0, 255, 0)
+                else:
+                    color = (0, 0, 0)
+                cv2.polylines(overlay, [border], isClosed=True, color=color, thickness=2)
+            cv2.addWeighted(overlay, alpha, frame, 1 - alpha, 0, frame)
+            border_states = [False] * len(borders)
             frame_show = cv2.resize(frame, (1280, 720))
             cv2.imshow("THREADPOOL EXECUTOR - Pose Detection", frame_show)
 
@@ -124,6 +143,7 @@ def main():
         return
 
     model = YOLO("yolo11l-pose.pt").to("cuda")
+    model.overrides["verbose"] = False
     frame_queue = queue.Queue(maxsize=20)
 
     with ThreadPoolExecutor(max_workers=2) as executor:
