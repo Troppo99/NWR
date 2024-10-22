@@ -18,11 +18,9 @@ def read_frames(cap, frame_queue):
             print("Stream gagal dibaca. Pastikan URL stream benar.")
             break
         try:
-            # Menambahkan frame langsung ke antrian tanpa GPU
             frame_queue.put(frame, block=False)
         except queue.Full:
-            print("Antrian penuh, frame dibuang")
-        # Mengurangi sleep agar lebih sinkron dengan frame rate video
+            pass
         time.sleep(0.01)
 
 
@@ -30,21 +28,61 @@ def draw_pose(frame, keypoint_coords, pairs, green_pairs, blue_pairs, pink_pairs
     for i, coord in enumerate(keypoint_coords):
         if coord:
             x, y = coord
-            cv2.circle(frame, (x, y), 5, (0, 255, 255), -1)  # Gambar titik keypoint
-
+            if i == 9:
+                # Memperpanjang posisi keypoint 9
+                kp7 = keypoint_coords[7]
+                kp9 = keypoint_coords[9]
+                if kp7 and kp9:
+                    # Hitung vektor arah dari keypoint 7 ke 9
+                    vx = kp9[0] - kp7[0]
+                    vy = kp9[1] - kp7[1]
+                    # Normalisasi vektor
+                    norm = (vx**2 + vy**2) ** 0.5
+                    if norm != 0:
+                        vx /= norm
+                        vy /= norm
+                        # Perpanjang vektor
+                        extension_length = 50  # Jarak perpanjangan
+                        x_new = int(kp9[0] + vx * extension_length)
+                        y_new = int(kp9[1] + vy * extension_length)
+                        x, y = x_new, y_new
+                radius = 30
+            elif i == 10:
+                # Memperpanjang posisi keypoint 10
+                kp8 = keypoint_coords[8]
+                kp10 = keypoint_coords[10]
+                if kp8 and kp10:
+                    # Hitung vektor arah dari keypoint 8 ke 10
+                    vx = kp10[0] - kp8[0]
+                    vy = kp10[1] - kp8[1]
+                    # Normalisasi vektor
+                    norm = (vx**2 + vy**2) ** 0.5
+                    if norm != 0:
+                        vx /= norm
+                        vy /= norm
+                        # Perpanjang vektor
+                        extension_length = 50  # Jarak perpanjangan
+                        x_new = int(kp10[0] + vx * extension_length)
+                        y_new = int(kp10[1] + vy * extension_length)
+                        x, y = x_new, y_new
+                radius = 30
+            else:
+                radius = 5
+            cv2.circle(frame, (x, y), radius, (0, 255, 255), -1)
+    # Gambar garis antar keypoint seperti biasa
     for i, j in pairs:
         if keypoint_coords[i] and keypoint_coords[j]:
             if (i, j) in green_pairs or (j, i) in green_pairs:
-                color = (0, 255, 0)  # Hijau untuk bagian tubuh atas
+                color = (0, 255, 0)
             elif (i, j) in blue_pairs or (j, i) in blue_pairs:
-                color = (255, 255, 0)  # Biru untuk bagian kaki
+                color = (255, 255, 0)
             elif (i, j) in pink_pairs or (j, i) in pink_pairs:
-                color = (200, 0, 255)  # Pink untuk bagian torso
+                color = (200, 0, 255)
             elif (i, j) in orange_pairs or (j, i) in orange_pairs:
-                color = (60, 190, 255)  # Oranye untuk bagian tangan
+                color = (60, 190, 255)
             else:
-                color = (255, 0, 0)  # Merah untuk bagian lainnya
-            cv2.line(frame, keypoint_coords[i], keypoint_coords[j], color, 2)  # Gambar garis antar keypoint
+                color = (255, 0, 0)
+            cv2.line(frame, keypoint_coords[i], keypoint_coords[j], color, 2)
 
 
 def process_frames(frame_queue):
