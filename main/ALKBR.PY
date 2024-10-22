@@ -447,7 +447,7 @@ class BroomDetector:
                 if self.broom_absence_timer_start is None:
                     self.broom_absence_timer_start = current_time
                 elif (current_time - self.broom_absence_timer_start) >= self.BROOM_ABSENCE_THRESHOLD:
-                    print(f"Resetting borders in percentage {percentage_green}")
+                    print(f"Resetting borders in percentage {percentage_green:.2f}%")
                     if percentage_green >= self.PERCENTAGE_GREEN_THRESHOLD:
                         print(
                             f"Green border is bigger than {self.PERCENTAGE_GREEN_THRESHOLD}% and data is sent to server"
@@ -580,12 +580,25 @@ class BroomDetector:
             timestamp_done_str = timestamp_done.strftime("%Y-%m-%d %H:%M:%S")
             timestamp_start_str = timestamp_start.strftime("%Y-%m-%d %H:%M:%S")
 
+            # **Define the parameter time to compare with (e.g., 09:00:00)**
+            parameter_time_str = "09:00:00"
+            parameter_time = datetime.strptime(parameter_time_str, "%H:%M:%S").time()
+
+            # **Extract the time portion of timestamp_done**
+            timestamp_done_time = timestamp_done.time()
+
+            # **Compare and set isdiscipline**
+            if timestamp_done_time > parameter_time:
+                isdiscipline = "Tidak disiplin"
+            else:
+                isdiscipline = "Disiplin"
+
             with open(image_path, "rb") as file:
                 binary_image = file.read()
 
             query = f"""
-            INSERT INTO {table} (cam, timestamp_start, timestamp_done, elapsed_time, percentage, image_done)
-            VALUES (%s, %s, %s, %s, %s, %s)
+            INSERT INTO {table} (cam, timestamp_start, timestamp_done, elapsed_time, percentage, image_done, isdiscipline)
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
             """
             cursor.execute(
                 query,
@@ -596,6 +609,7 @@ class BroomDetector:
                     elapsed_time,
                     percentage_green,
                     binary_image,
+                    isdiscipline,
                 ),
             )
             connection.commit()

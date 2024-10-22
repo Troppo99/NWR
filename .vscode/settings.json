@@ -8,7 +8,7 @@
         "editor.formatOnSave": true
     },
     "black-formatter.args": [
-        "--line-length=120"
+        "--line-length=600"
     ],
     "editor.autoIndent": "full",
     "editor.cursorBlinking": "smooth",
