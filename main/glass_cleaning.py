@@ -49,6 +49,7 @@ borders_pane = [
     [(369, 25), (385, 20), (387, 3), (371, 1)],
 ]
 
+
 def process_model(frame):
     with torch.no_grad():
         results = model(frame, stream=True, imgsz=960)
