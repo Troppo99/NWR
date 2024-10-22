@@ -12,6 +12,7 @@ from datetime import datetime, timedelta
 import threading
 import queue
 from concurrent.futures import ThreadPoolExecutor
+import multiprocessing
 
 
 class BroomDetector:
@@ -930,17 +931,27 @@ class CarpalDetector:
         cv2.destroyAllWindows()
 
 
-if __name__ == "__main__":
+def run_carpal():
     carpal = CarpalDetector()
     carpal.main()
 
+def run_broom():
     detector = BroomDetector(
         BROOM_ABSENCE_THRESHOLD=10,
         BROOM_TOUCH_THRESHOLD=0,
         PERCENTAGE_GREEN_THRESHOLD=50,
-        camera_name="10.5.0.182",
+        camera_name="10.5.0.170",
         new_size=(960, 540),
-        rtsp_url="D:/NWR/videos/test1.mp4",
+        # rtsp_url="D:/NWR/videos/test1.mp4",
     )
-
     detector.run()
+
+if __name__ == "__main__":
+    carpal_process = multiprocessing.Process(target=run_carpal)
+    broom_process = multiprocessing.Process(target=run_broom)
+
+    carpal_process.start()
+    broom_process.start()
+
+    carpal_process.join()
+    broom_process.join()
