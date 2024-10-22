@@ -10,7 +10,7 @@ import time
 import numpy as np
 
 stop_flag = False
-borders = [
+borders_pane = [
     [(30, 258), (60, 253), (58, 211), (24, 217)],
     [(58, 211), (56, 169), (23, 173), (24, 217)],
     [(23, 173), (56, 169), (57, 132), (20, 139)],
@@ -48,8 +48,6 @@ borders = [
     [(369, 53), (387, 44), (385, 20), (369, 25)],
     [(369, 25), (385, 20), (387, 3), (371, 1)],
 ]
-print(len(borders))
-
 
 def process_model(frame):
     with torch.no_grad():
@@ -153,7 +151,7 @@ def process_frames(frame_queue):
     orange_pairs = {(14, 16), (12, 14), (11, 13), (13, 15)}
 
     # Initialize border states
-    border_states = [{"is_green": False} for _ in borders]
+    border_states = [{"is_green": False} for _ in borders_pane]
     keypoint_absence_timer_start = None
     first_frame = True
 
@@ -166,7 +164,7 @@ def process_frames(frame_queue):
                 scale_x = width / 1280
                 scale_y = height / 720
                 scaled_borders_pts = []
-                for border in borders:
+                for border in borders_pane:
                     scaled_border = []
                     for x, y in border:
                         scaled_x = int(x * scale_x)
