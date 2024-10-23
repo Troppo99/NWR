@@ -643,7 +643,7 @@ class BroomDetector:
 
             cap.release()
 
-    def run(self):
+    def main(self):
         pairs_broom = [(0, 1), (1, 2), (2, 3), (2, 4)]
         process_every_n_frames = 2
         frame_count = 0
@@ -944,7 +944,7 @@ def run_broom():
         new_size=(960, 540),
         # rtsp_url="D:/NWR/videos/test1.mp4",
     )
-    detector.run()
+    detector.main()
 
 if __name__ == "__main__":
     carpal_process = multiprocessing.Process(target=run_carpal)
