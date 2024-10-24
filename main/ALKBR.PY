@@ -479,10 +479,10 @@ class BroomDetector:
                 elif (
                     current_time - self.broom_absence_timer_start
                 ) >= self.BROOM_ABSENCE_THRESHOLD:
-                    print(f"Resetting borders in percentage {percentage_green:.2f}%")
+                    print(f"Resetting broom borders in percentage {percentage_green:.2f}%")
                     if percentage_green >= self.BROOM_PERCENTAGE_GREEN_THRESHOLD:
                         print(
-                            f"Green border is bigger than {self.BROOM_PERCENTAGE_GREEN_THRESHOLD}% and data is sent to server"
+                            f"Green broom border is bigger than {self.BROOM_PERCENTAGE_GREEN_THRESHOLD}% and data is sent to server"
                         )
                         if self.first_green_time is not None:
                             self.elapsed_time = current_time - self.first_green_time
@@ -536,7 +536,7 @@ class BroomDetector:
                 self.is_counting = False
 
         if percentage_green == 100:
-            print("Percentage green is 100%, performing immediate reset and data send.")
+            print("Percentage broom green is 100%, performing immediate reset and data send.")
             if self.first_green_time is not None:
                 self.elapsed_time = current_time - self.first_green_time
             overlay = frame_resized.copy()
@@ -657,9 +657,9 @@ class BroomDetector:
                 ),
             )
             connection.commit()
-            print(f"Data successfully sent to server.")
+            print(f"Broom data successfully sent to server.")
         except pymysql.MySQLError as e:
-            print(f"Error sending data to server: {e}")
+            print(f"Error sending broom data to server: {e}")
         finally:
             if "cursor" in locals():
                 cursor.close()

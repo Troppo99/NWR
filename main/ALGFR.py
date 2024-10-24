@@ -275,10 +275,10 @@ class CarpalDetector:
                 elif (
                     current_time - self.carpal_absence_timer_start
                 ) >= self.CARPAL_ABSENCE_THRESHOLD:
-                    print(f"Resetting borders in percentage {percentage_green:.2f}%")
+                    print(f"Resetting carpal borders in percentage {percentage_green:.2f}%")
                     if percentage_green >= self.CARPAL_PERCENTAGE_GREEN_THRESHOLD:
                         print(
-                            f"Green border is bigger than {self.CARPAL_PERCENTAGE_GREEN_THRESHOLD}% and data is sent to server"
+                            f"Green carpal border is bigger than {self.CARPAL_PERCENTAGE_GREEN_THRESHOLD}% and data is sent to server"
                         )
                         if self.first_green_time is not None:
                             self.elapsed_time = current_time - self.first_green_time
@@ -331,7 +331,7 @@ class CarpalDetector:
                 self.is_counting = False
 
         if percentage_green == 100:
-            print("Percentage green is 100%, performing immediate reset and data send.")
+            print("Percentage carpal green is 100%, performing immediate reset and data send.")
             if self.first_green_time is not None:
                 self.elapsed_time = current_time - self.first_green_time
             overlay = frame_resized.copy()
@@ -452,9 +452,9 @@ class CarpalDetector:
                 ),
             )
             connection.commit()
-            print(f"Data successfully sent to server.")
+            print(f"Carpal data successfully sent to server.")
         except pymysql.MySQLError as e:
-            print(f"Error sending data to server: {e}")
+            print(f"Error sending carpal data to server: {e}")
         finally:
             if "cursor" in locals():
                 cursor.close()
