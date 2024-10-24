@@ -1,11 +1,13 @@
-from ALKBR import BroomDetector
+from ALKBR import run_broom
+from ALGFR import run_carpal
+import multiprocessing
 
-detector = BroomDetector(
-    BROOM_ABSENCE_THRESHOLD=20,
-    BROOM_TOUCH_THRESHOLD=0,
-    PERCENTAGE_GREEN_THRESHOLD=50,
-    camera_name="10.5.0.161",
-    # new_size=(1280, 720),
-)
+if __name__ == "__main__":
+    carpal_process = multiprocessing.Process(target=run_carpal, args=(10, 0, 50, "10.5.0.161", (960, 540)))
+    broom_process = multiprocessing.Process(target=run_broom, args=(10, 0, 50, "10.5.0.161", (960, 540)))
 
-detector.run()
+    carpal_process.start()
+    broom_process.start()
+
+    carpal_process.join()
+    broom_process.join()
