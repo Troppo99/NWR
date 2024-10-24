@@ -48,13 +48,13 @@ class CarpalDetector:
             self.rtsp_url = f"rtsp://admin:oracle2015@{camera_name}:554/Streaming/Channels/1"
         else:
             self.rtsp_url = rtsp_url
-        self.carpal_borders, self.carpal_idx = self.camera_config(camera_name)
+        self.borders, self.idx = self.camera_config(camera_name)
         self.show_text = True
         self.frame_queue = queue.Queue(maxsize=10)
         self.stop_event = threading.Event()
         self.frame_thread = None
 
-        for border in self.carpal_borders:
+        for border in self.borders:
             scaled_border = []
             for x, y in border:
                 scaled_x = int(x * self.scale_x)
@@ -69,7 +69,7 @@ class CarpalDetector:
                 "carpal_overlap_time": 0.0,
                 "last_carpal_overlap_time": None,
             }
-            for idx in range(len(self.carpal_borders))
+            for idx in range(len(self.borders))
         }
         self.borders_pts = [np.array(border, np.int32) for border in self.scaled_borders]
         self.carpal_model = YOLO("yolo11l-pose.pt").to("cuda")
@@ -313,7 +313,7 @@ class CarpalDetector:
                         self.send_to_server(
                             "10.5.0.2", percentage_green, self.elapsed_time, image_path
                         )
-                    for idx in range(len(self.carpal_borders)):
+                    for idx in range(len(self.borders)):
                         self.border_states[idx] = {
                             "is_green": False,
                             "carpal_overlap_time": 0.0,
@@ -359,7 +359,7 @@ class CarpalDetector:
             cv2.imwrite(image_path, frame_resized)
             self.send_to_server("10.5.0.2", percentage_green, self.elapsed_time, image_path)
 
-            for idx in range(len(self.carpal_borders)):
+            for idx in range(len(self.borders)):
                 self.border_states[idx] = {
                     "is_green": False,
                     "carpal_overlap_time": 0.0,
@@ -489,7 +489,7 @@ class CarpalDetector:
         self.frame_thread.daemon = True
         self.frame_thread.start()
 
-        window_name = f"RUN{self.carpal_idx} : {self.camera_name}"
+        window_name = f"RUN{self.idx} : {self.camera_name}"
         cv2.namedWindow(window_name, cv2.WINDOW_NORMAL)
         cv2.resizeWindow(window_name, self.new_width, self.new_height)
 
@@ -512,7 +512,7 @@ class CarpalDetector:
             else:
                 self.fps = 0
             self.prev_frame_time = current_time
-            total_borders = len(self.carpal_borders)
+            total_borders = len(self.borders)
             green_borders = sum(1 for state in self.border_states.values() if state["is_green"])
             percentage_green = (green_borders / total_borders) * 100
             frame_resized = self.process_frame(frame, current_time, percentage_green, pairs_human)
