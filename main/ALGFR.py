@@ -435,7 +435,7 @@ class CarpalDetector:
                 binary_image = file.read()
 
             query = f"""
-            INSERT INTO {table} (cam, timestamp_start, timestamp_done, elapsed_time, percentage, image_done, isdiscipline)
+            INSERT INTO {table} (cam, timestamp_start, timestamp_done, percentage, image_done, isdiscipline)
             VALUES (%s, %s, %s, %s, %s, %s, %s)
             """
             cursor.execute(
@@ -444,7 +444,6 @@ class CarpalDetector:
                     camera_name,
                     timestamp_start_str,
                     timestamp_done_str,
-                    elapsed_time,
                     percentage_green,
                     binary_image,
                     isdiscipline,
