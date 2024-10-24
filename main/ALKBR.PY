@@ -649,7 +649,7 @@ class BroomDetector:
         self.frame_thread.daemon = True
         self.frame_thread.start()
 
-        window_name = f"RUN{self.idx} : {self.camera_name}"
+        window_name = f"BROOM{self.idx} : {self.camera_name}"
         cv2.namedWindow(window_name, cv2.WINDOW_NORMAL)
         cv2.resizeWindow(window_name, self.new_width, self.new_height)
 
