@@ -29,10 +29,7 @@ class CarpalDetector:
         self.CARPAL_ABSENCE_THRESHOLD = CARPAL_ABSENCE_THRESHOLD
         self.CARPAL_TOUCH_THRESHOLD = CARPAL_TOUCH_THRESHOLD
         self.CARPAL_PERCENTAGE_GREEN_THRESHOLD = CARPAL_PERCENTAGE_GREEN_THRESHOLD
-        if new_size is None:
-            self.new_width, self.new_height = 360, 202
-        else:
-            self.new_width, self.new_height = new_size
+        self.new_width, self.new_height = new_size
         self.scale_x = self.new_width / 1280
         self.scale_y = self.new_height / 720
         self.scaled_borders = []
@@ -291,12 +288,12 @@ class CarpalDetector:
                         time_str = f"Elapsed Time: {minutes:02d}:{seconds:02d}"
                         if self.show_text:
                             cvzone.putTextRect(
-                                frame_resized, time_str, (10, 100), scale=1, thickness=2, offset=5
+                                frame_resized, time_str, (10, self.new_height-100), scale=1, thickness=2, offset=5
                             )
                             cvzone.putTextRect(
                                 frame_resized,
                                 f"Percentage of Green Border: {percentage_green:.2f}%",
-                                (10, 50),
+                                (10, self.new_height-50),
                                 scale=1,
                                 thickness=2,
                                 offset=5,
@@ -304,7 +301,7 @@ class CarpalDetector:
                             cvzone.putTextRect(
                                 frame_resized,
                                 f"FPS: {int(self.fps)}",
-                                (10, 75),
+                                (10, self.new_height-75),
                                 scale=1,
                                 thickness=2,
                                 offset=5,
@@ -343,18 +340,18 @@ class CarpalDetector:
             time_str = f"Elapsed Time: {minutes:02d}:{seconds:02d}"
             if self.show_text:
                 cvzone.putTextRect(
-                    frame_resized, time_str, (10, 100), scale=1, thickness=2, offset=5
+                    frame_resized, time_str, (10, self.new_height-100), scale=1, thickness=2, offset=5
                 )
                 cvzone.putTextRect(
                     frame_resized,
                     f"Percentage of Green Border: {percentage_green:.2f}%",
-                    (10, 50),
+                    (10, self.new_height-50),
                     scale=1,
                     thickness=2,
                     offset=5,
                 )
                 cvzone.putTextRect(
-                    frame_resized, f"FPS: {int(self.fps)}", (10, 75), scale=1, thickness=2, offset=5
+                    frame_resized, f"FPS: {int(self.fps)}", (10, self.new_height-75), scale=1, thickness=2, offset=5
                 )
             image_path = "main/images/green_borders_image_182.jpg"
             cv2.imwrite(image_path, frame_resized)
@@ -387,7 +384,7 @@ class CarpalDetector:
             time_str = f"Elapsed Time: {minutes:02d}:{seconds:02d}"
             if self.show_text:
                 cvzone.putTextRect(
-                    frame_resized, time_str, (10, 100), scale=1, thickness=2, offset=5
+                    frame_resized, time_str, (10, self.new_height-100), scale=1, thickness=2, offset=5
                 )
 
         return frame_resized
@@ -521,13 +518,13 @@ class CarpalDetector:
                 cvzone.putTextRect(
                     frame_resized,
                     f"Percentage of Green Border: {percentage_green:.2f}%",
-                    (10, 50),
+                    (10, self.new_height-50),
                     scale=1,
                     thickness=2,
                     offset=5,
                 )
                 cvzone.putTextRect(
-                    frame_resized, f"FPS: {int(self.fps)}", (10, 75), scale=1, thickness=2, offset=5
+                    frame_resized, f"FPS: {int(self.fps)}", (10, self.new_height-75), scale=1, thickness=2, offset=5
                 )
             cv2.imshow(window_name, frame_resized)
             key = cv2.waitKey(1) & 0xFF
@@ -539,7 +536,7 @@ class CarpalDetector:
         cv2.destroyAllWindows()
         self.frame_thread.join()
 
-def run_carpal(CARPAL_ABSENCE_THRESHOLD, CARPAL_TOUCH_THRESHOLD, CARPAL_PERCENTAGE_GREEN_THRESHOLD, camera_name, new_size):
+def run_carpal(CARPAL_ABSENCE_THRESHOLD, CARPAL_TOUCH_THRESHOLD, CARPAL_PERCENTAGE_GREEN_THRESHOLD, camera_name, new_size=(360, 202)):
     detector = CarpalDetector(
         CARPAL_ABSENCE_THRESHOLD=CARPAL_ABSENCE_THRESHOLD,
         CARPAL_TOUCH_THRESHOLD=CARPAL_TOUCH_THRESHOLD,

@@ -29,10 +29,7 @@ class BroomDetector:
         self.BROOM_ABSENCE_THRESHOLD = BROOM_ABSENCE_THRESHOLD
         self.BROOM_TOUCH_THRESHOLD = BROOM_TOUCH_THRESHOLD
         self.BROOM_PERCENTAGE_GREEN_THRESHOLD = BROOM_PERCENTAGE_GREEN_THRESHOLD
-        if new_size is None:
-            self.new_width, self.new_height = 360, 202
-        else:
-            self.new_width, self.new_height = new_size
+        self.new_width, self.new_height = new_size
         self.scale_x = self.new_width / 1280
         self.scale_y = self.new_height / 720
         self.scaled_borders = []
@@ -724,7 +721,7 @@ class BroomDetector:
         cv2.destroyAllWindows()
         self.frame_thread.join()
 
-def run_broom(BROOM_ABSENCE_THRESHOLD, BROOM_TOUCH_THRESHOLD, BROOM_PERCENTAGE_GREEN_THRESHOLD, camera_name, new_size):
+def run_broom(BROOM_ABSENCE_THRESHOLD, BROOM_TOUCH_THRESHOLD, BROOM_PERCENTAGE_GREEN_THRESHOLD, camera_name, new_size=(360, 202)):
     detector = BroomDetector(
         BROOM_ABSENCE_THRESHOLD=BROOM_ABSENCE_THRESHOLD,
         BROOM_TOUCH_THRESHOLD=BROOM_TOUCH_THRESHOLD,
