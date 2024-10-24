@@ -498,7 +498,6 @@ class CarpalDetector:
             try:
                 frame = self.frame_queue.get(timeout=5)
             except queue.Empty:
-                print("No frame received in the last 5 seconds.")
                 continue
 
             frame_count += 1

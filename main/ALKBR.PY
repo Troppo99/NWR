@@ -680,11 +680,9 @@ class BroomDetector:
         while True:
             if self.stop_event.is_set():
                 break
-
             try:
                 frame = self.frame_queue.get(timeout=5)
             except queue.Empty:
-                print("No frame received in the last 5 seconds.")
                 continue
 
             frame_count += 1
@@ -715,11 +713,11 @@ class BroomDetector:
                     frame_resized, f"FPS: {int(self.fps)}", (10, 75), scale=1, thickness=2, offset=5
                 )
             cv2.imshow(window_name, frame_resized)
-
-            if cv2.waitKey(1) & 0xFF == ord("n"):
+            key = cv2.waitKey(1) & 0xFF
+            if key == ord("n"):
                 self.stop_event.set()
                 break
-            elif cv2.waitKey(1) & 0xFF == ord("s"):
+            elif key == ord("s"):
                 self.show_text = not self.show_text
         cv2.destroyAllWindows()
         self.frame_thread.join()
