@@ -18,7 +18,7 @@ class CarpalDetector:
         self,
         CARPAL_ABSENCE_THRESHOLD=10,
         CARPAL_TOUCH_THRESHOLD=0,
-        PERCENTAGE_GREEN_THRESHOLD=50,
+        CARPAL_PERCENTAGE_GREEN_THRESHOLD=50,
         camera_name=None,
         new_size=None,
         rtsp_url=None,
@@ -26,7 +26,7 @@ class CarpalDetector:
         self.CARPAL_CONFIDENCE_THRESHOLD = 0.5
         self.CARPAL_ABSENCE_THRESHOLD = CARPAL_ABSENCE_THRESHOLD
         self.CARPAL_TOUCH_THRESHOLD = CARPAL_TOUCH_THRESHOLD
-        self.PERCENTAGE_GREEN_THRESHOLD = PERCENTAGE_GREEN_THRESHOLD
+        self.CARPAL_PERCENTAGE_GREEN_THRESHOLD = CARPAL_PERCENTAGE_GREEN_THRESHOLD
         if new_size is None:
             self.new_width, self.new_height = 360, 202
         else:
@@ -47,13 +47,13 @@ class CarpalDetector:
             self.rtsp_url = f"rtsp://admin:oracle2015@{camera_name}:554/Streaming/Channels/1"
         else:
             self.rtsp_url = rtsp_url
-        self.borders, self.idx = self.camera_config(camera_name)
+        self.carpal_borders, self.carpal_idx = self.camera_config(camera_name)
         self.show_text = True
         self.frame_queue = queue.Queue(maxsize=10)
         self.stop_event = threading.Event()
         self.frame_thread = None
 
-        for border in self.borders:
+        for border in self.carpal_borders:
             scaled_border = []
             for x, y in border:
                 scaled_x = int(x * self.scale_x)
@@ -68,15 +68,15 @@ class CarpalDetector:
                 "carpal_overlap_time": 0.0,
                 "last_carpal_overlap_time": None,
             }
-            for idx in range(len(self.borders))
+            for idx in range(len(self.carpal_borders))
         }
         self.borders_pts = [np.array(border, np.int32) for border in self.scaled_borders]
-        self.model_carpal = YOLO("yolo11l-pose.pt").to("cuda")
-        self.model_carpal.overrides["verbose"] = False
-        print(f"Model Carpal device: {next(self.model_carpal.model.parameters()).device}")
+        self.carpal_model = YOLO("yolo11l-pose.pt").to("cuda")
+        self.carpal_model.overrides["verbose"] = False
+        print(f"Model Carpal device: {next(self.carpal_model.model.parameters()).device}")
 
     def camera_config(self, camera_name):
-        config = {
+        carpal_config = {
             "10.5.0.182": [
                 [(1, 305), (65, 261), (56, 188), (1, 221)],
                 [(1, 221), (56, 188), (51, 127), (1, 155)],
@@ -144,13 +144,13 @@ class CarpalDetector:
                 [(1256, 23), (1193, 6), (1254, 4)],
             ],
         }
-        camera_names = list(config.keys())
-        indices = {name: idx + 1 for idx, name in enumerate(camera_names)}
-        return config[camera_name], indices[camera_name]
+        carpal_camera_names = list(carpal_config.keys())
+        carpal_indices = {name: idx + 1 for idx, name in enumerate(carpal_camera_names)}
+        return carpal_config[camera_name], carpal_indices[camera_name]
 
     def process_model(self, frame):
         with torch.no_grad():
-            results = self.model_carpal(frame, stream=True, imgsz=960)
+            results = self.carpal_model(frame, stream=True, imgsz=960)
         return results
 
     def export_frame(self, results, color, pairs):
@@ -274,9 +274,9 @@ class CarpalDetector:
                     current_time - self.carpal_absence_timer_start
                 ) >= self.CARPAL_ABSENCE_THRESHOLD:
                     print(f"Resetting borders in percentage {percentage_green:.2f}%")
-                    if percentage_green >= self.PERCENTAGE_GREEN_THRESHOLD:
+                    if percentage_green >= self.CARPAL_PERCENTAGE_GREEN_THRESHOLD:
                         print(
-                            f"Green border is bigger than {self.PERCENTAGE_GREEN_THRESHOLD}% and data is sent to server"
+                            f"Green border is bigger than {self.CARPAL_PERCENTAGE_GREEN_THRESHOLD}% and data is sent to server"
                         )
                         if self.first_green_time is not None:
                             self.elapsed_time = current_time - self.first_green_time
@@ -312,7 +312,7 @@ class CarpalDetector:
                         self.send_to_server(
                             "10.5.0.2", percentage_green, self.elapsed_time, image_path
                         )
-                    for idx in range(len(self.borders)):
+                    for idx in range(len(self.carpal_borders)):
                         self.border_states[idx] = {
                             "is_green": False,
                             "carpal_overlap_time": 0.0,
@@ -358,7 +358,7 @@ class CarpalDetector:
             cv2.imwrite(image_path, frame_resized)
             self.send_to_server("10.5.0.2", percentage_green, self.elapsed_time, image_path)
 
-            for idx in range(len(self.borders)):
+            for idx in range(len(self.carpal_borders)):
                 self.border_states[idx] = {
                     "is_green": False,
                     "carpal_overlap_time": 0.0,
@@ -489,7 +489,7 @@ class CarpalDetector:
         self.frame_thread.daemon = True
         self.frame_thread.start()
 
-        window_name = f"RUN{self.idx} : {self.camera_name}"
+        window_name = f"RUN{self.carpal_idx} : {self.camera_name}"
         cv2.namedWindow(window_name, cv2.WINDOW_NORMAL)
         cv2.resizeWindow(window_name, self.new_width, self.new_height)
 
@@ -513,7 +513,7 @@ class CarpalDetector:
             else:
                 self.fps = 0
             self.prev_frame_time = current_time
-            total_borders = len(self.borders)
+            total_borders = len(self.carpal_borders)
             green_borders = sum(1 for state in self.border_states.values() if state["is_green"])
             percentage_green = (green_borders / total_borders) * 100
             frame_resized = self.process_frame(frame, current_time, percentage_green, pairs_human)
@@ -544,7 +544,7 @@ if __name__ == "__main__":
     detector = CarpalDetector(
         CARPAL_ABSENCE_THRESHOLD=10,
         CARPAL_TOUCH_THRESHOLD=0,
-        PERCENTAGE_GREEN_THRESHOLD=50,
+        CARPAL_PERCENTAGE_GREEN_THRESHOLD=50,
         camera_name="10.5.0.182",
         new_size=(960, 540),
     )

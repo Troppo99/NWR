@@ -18,7 +18,7 @@ class BroomDetector:
         self,
         BROOM_ABSENCE_THRESHOLD=10,
         BROOM_TOUCH_THRESHOLD=0,
-        PERCENTAGE_GREEN_THRESHOLD=50,
+        BROOM_PERCENTAGE_GREEN_THRESHOLD=50,
         camera_name=None,
         new_size=None,
         rtsp_url=None,
@@ -26,7 +26,7 @@ class BroomDetector:
         self.BROOM_CONFIDENCE_THRESHOLD = 0.9
         self.BROOM_ABSENCE_THRESHOLD = BROOM_ABSENCE_THRESHOLD
         self.BROOM_TOUCH_THRESHOLD = BROOM_TOUCH_THRESHOLD
-        self.PERCENTAGE_GREEN_THRESHOLD = PERCENTAGE_GREEN_THRESHOLD
+        self.BROOM_PERCENTAGE_GREEN_THRESHOLD = BROOM_PERCENTAGE_GREEN_THRESHOLD
         if new_size is None:
             self.new_width, self.new_height = 360, 202
         else:
@@ -47,13 +47,13 @@ class BroomDetector:
             self.rtsp_url = f"rtsp://admin:oracle2015@{camera_name}:554/Streaming/Channels/1"
         else:
             self.rtsp_url = rtsp_url
-        self.borders, self.idx = self.camera_config(camera_name)
+        self.broom_borders, self.broom_idx = self.camera_config(camera_name)
         self.show_text = True
         self.frame_queue = queue.Queue(maxsize=10)
         self.stop_event = threading.Event()
         self.frame_thread = None
 
-        for border in self.borders:
+        for border in self.broom_borders:
             scaled_border = []
             for x, y in border:
                 scaled_x = int(x * self.scale_x)
@@ -68,15 +68,15 @@ class BroomDetector:
                 "broom_overlap_time": 0.0,
                 "last_broom_overlap_time": None,
             }
-            for idx in range(len(self.borders))
+            for idx in range(len(self.broom_borders))
         }
         self.borders_pts = [np.array(border, np.int32) for border in self.scaled_borders]
-        self.model_broom = YOLO("broom5l_11.pt").to("cuda")
-        self.model_broom.overrides["verbose"] = False
-        print(f"Model Broom device: {next(self.model_broom.model.parameters()).device}")
+        self.broom_model = YOLO("broom5l_11.pt").to("cuda")
+        self.broom_model.overrides["verbose"] = False
+        print(f"Model Broom device: {next(self.broom_model.model.parameters()).device}")
 
     def camera_config(self, camera_name):
-        config = {
+        broom_config = {
             "10.5.0.182": [
                 [(29, 493), (107, 444), (168, 543), (81, 598)],
                 [(168, 543), (182, 533), (194, 550), (297, 487), (245, 429), (138, 491)],
@@ -352,13 +352,13 @@ class BroomDetector:
                 [(767, 708), (766, 583), (966, 575), (989, 706)],
             ],
         }
-        camera_names = list(config.keys())
-        indices = {name: idx + 1 for idx, name in enumerate(camera_names)}
-        return config[camera_name], indices[camera_name]
+        broom_camera_names = list(broom_config.keys())
+        broom_indices = {name: idx + 1 for idx, name in enumerate(broom_camera_names)}
+        return broom_config[camera_name], broom_indices[camera_name]
 
     def process_model(self, frame):
         with torch.no_grad():
-            results = self.model_broom(frame, stream=True, imgsz=960)
+            results = self.broom_model(frame, stream=True, imgsz=960)
         return results
 
     def export_frame(self, results, color, pairs):
@@ -478,9 +478,9 @@ class BroomDetector:
                     current_time - self.broom_absence_timer_start
                 ) >= self.BROOM_ABSENCE_THRESHOLD:
                     print(f"Resetting borders in percentage {percentage_green:.2f}%")
-                    if percentage_green >= self.PERCENTAGE_GREEN_THRESHOLD:
+                    if percentage_green >= self.BROOM_PERCENTAGE_GREEN_THRESHOLD:
                         print(
-                            f"Green border is bigger than {self.PERCENTAGE_GREEN_THRESHOLD}% and data is sent to server"
+                            f"Green border is bigger than {self.BROOM_PERCENTAGE_GREEN_THRESHOLD}% and data is sent to server"
                         )
                         if self.first_green_time is not None:
                             self.elapsed_time = current_time - self.first_green_time
@@ -517,7 +517,7 @@ class BroomDetector:
                             "10.5.0.2", percentage_green, self.elapsed_time, image_path
                         )
 
-                    for idx in range(len(self.borders)):
+                    for idx in range(len(self.broom_borders)):
                         self.border_states[idx] = {
                             "is_green": False,
                             "broom_overlap_time": 0.0,
@@ -563,7 +563,7 @@ class BroomDetector:
             cv2.imwrite(image_path, frame_resized)
             self.send_to_server("10.5.0.2", percentage_green, self.elapsed_time, image_path)
 
-            for idx in range(len(self.borders)):
+            for idx in range(len(self.broom_borders)):
                 self.border_states[idx] = {
                     "is_green": False,
                     "broom_overlap_time": 0.0,
@@ -678,7 +678,7 @@ class BroomDetector:
         self.frame_thread.daemon = True
         self.frame_thread.start()
 
-        window_name = f"RUN{self.idx} : {self.camera_name}"
+        window_name = f"RUN{self.broom_idx} : {self.camera_name}"
         cv2.namedWindow(window_name, cv2.WINDOW_NORMAL)
         cv2.resizeWindow(window_name, self.new_width, self.new_height)
 
@@ -703,7 +703,7 @@ class BroomDetector:
             else:
                 self.fps = 0
             self.prev_frame_time = current_time
-            total_borders = len(self.borders)
+            total_borders = len(self.broom_borders)
             green_borders = sum(1 for state in self.border_states.values() if state["is_green"])
             percentage_green = (green_borders / total_borders) * 100
             frame_resized = self.process_frame(frame, current_time, percentage_green, pairs_broom)
@@ -734,7 +734,7 @@ if __name__ == "__main__":
     detector = BroomDetector(
         BROOM_ABSENCE_THRESHOLD=10,
         BROOM_TOUCH_THRESHOLD=0,
-        PERCENTAGE_GREEN_THRESHOLD=50,
+        BROOM_PERCENTAGE_GREEN_THRESHOLD=50,
         camera_name="10.5.0.182",
         new_size=(960, 540),
     )
