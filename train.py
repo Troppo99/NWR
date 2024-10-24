@@ -4,15 +4,15 @@ os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
 from ultralytics import YOLO
 
 if __name__ == "__main__":
-    model = YOLO("D:/NWR/run/finishing/version2/weights/last.pt")
+    model = YOLO("yolo11l-pose.pt")
     model.train(
-        data="D:/SBHNL/Images/BSML/Datasets/Finishing/finishing_united/data.yaml",
-        epochs=50,
+        data="D:/SBHNL/Images/AHMDL/ALKBR/BROOM_V5/data.yaml",
+        epochs=100,
         imgsz=640,
-        project="run/finishing",
-        name="version2",
+        project="run/broom5_yolo11",
+        name="version1",
         device="cuda",
         batch=16,
-        resume=True,
+        resume=False,
         amp=True,  # Use 'amp' instead of 'fp16' to enable mixed-precision training
     )
