@@ -153,42 +153,41 @@ class CarpalDetector:
             results = self.model_carpal(frame, stream=True, imgsz=960)
         return results
 
-    def export_frame(self,results,color,pairs,):
+    def export_frame(self, results, color, pairs):
         points = []
         coords = []
         keypoint_positions = []
         confidence_threshold = self.CONFIDENCE_THRESHOLD
 
         for result in results:
-            keypoints_data = result.keypoints.data
-            if (
-                keypoints_data is not None
-                and keypoints_data.xy is not None
-                and keypoints_data.conf is not None
-            ):
-                if keypoints_data.shape[0] > 0:
-                    keypoints_array = keypoints_data.xy.cpu().numpy()
-                    keypoints_conf = keypoints_data.conf.cpu().numpy()
-                    for keypoints_per_object, keypoints_conf_per_object in zip(
-                        keypoints_array, keypoints_conf
-                    ):
-                        keypoints_list = []
-                        for kp, kp_conf in zip(keypoints_per_object, keypoints_conf_per_object):
-                            if kp_conf >= confidence_threshold:
-                                x, y = kp[0], kp[1]
-                                keypoints_list.append((int(x), int(y)))
-                            else:
-                                keypoints_list.append(None)
-                        keypoint_positions.append(keypoints_list)
-                        for point in keypoints_list:
-                            if point is not None:
-                                points.append(point)
-                        for i, j in pairs:
-                            if i < len(keypoints_list) and j < len(keypoints_list):
-                                if keypoints_list[i] is not None and keypoints_list[j] is not None:
-                                    coords.append((keypoints_list[i], keypoints_list[j], color))
+            keypoints_data = result.keypoints
+            if keypoints_data is not None and hasattr(keypoints_data, "xy"):
+                keypoints_array = (keypoints_data.xy.cpu().numpy())
+                if hasattr(keypoints_data, "conf") and keypoints_data.conf is not None:
+                    keypoints_conf = (keypoints_data.conf.cpu().numpy())
                 else:
-                    continue
+                    keypoints_conf = np.ones((keypoints_array.shape[0], keypoints_array.shape[1]))
+
+                for keypoints_per_object, keypoints_conf_per_object in zip(
+                    keypoints_array, keypoints_conf
+                ):
+                    keypoints_list = []
+                    for kp, kp_conf in zip(keypoints_per_object, keypoints_conf_per_object):
+                        x, y = kp
+                        conf = kp_conf
+                        if conf >= confidence_threshold:
+                            keypoints_list.append((int(x), int(y)))
+                            points.append((int(x), int(y)))
+                        else:
+                            keypoints_list.append(None)
+                    keypoint_positions.append(keypoints_list)
+
+                    for i, j in pairs:
+                        if i < len(keypoints_list) and j < len(keypoints_list):
+                            if keypoints_list[i] is not None and keypoints_list[j] is not None:
+                                coords.append((keypoints_list[i], keypoints_list[j], color))
+            else:
+                pass
         return points, coords, keypoint_positions
 
     def frame_capture(self):
@@ -296,8 +295,8 @@ class CarpalDetector:
                             )
                             cvzone.putTextRect(
                                 frame_resized,
-                                f"Carpal Absence Time: {self.elapsed_time:.2f} seconds",
-                                (10, 150),
+                                f"FPS: {int(self.fps)}",
+                                (10, 75),
                                 scale=1,
                                 thickness=2,
                                 offset=5,
@@ -356,8 +355,8 @@ class CarpalDetector:
             for idx in range(len(self.borders)):
                 self.border_states[idx] = {
                     "is_green": False,
-                    "broom_overlap_time": 0.0,
-                    "last_broom_overlap_time": None,
+                    "carpal_overlap_time": 0.0,
+                    "last_carpal_overlap_time": None,
                 }
                 border_colors[idx] = (0, 255, 255)
             self.first_green_time = None
@@ -525,10 +524,11 @@ class CarpalDetector:
                     frame_resized, f"FPS: {int(self.fps)}", (10, 75), scale=1, thickness=2, offset=5
                 )
             cv2.imshow(window_name, frame_resized)
-            if cv2.waitKey(1) & 0xFF == ord("n"):
+            key = cv2.waitKey(1) & 0xFF
+            if key == ord("n"):
                 self.stop_event.set()
                 break
-            elif cv2.waitKey(1) & 0xFF == ord("s"):
+            elif key == ord("s"):
                 self.show_text = not self.show_text
         cv2.destroyAllWindows()
         self.frame_thread.join()

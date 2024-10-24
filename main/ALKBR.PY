@@ -71,7 +71,7 @@ class BroomDetector:
             for idx in range(len(self.borders))
         }
         self.borders_pts = [np.array(border, np.int32) for border in self.scaled_borders]
-        self.model_broom = YOLO("broom5l.pt").to("cuda")
+        self.model_broom = YOLO("broom5l_11.pt").to("cuda")
         self.model_broom.overrides["verbose"] = False
         print(f"Model Broom device: {next(self.model_broom.model.parameters()).device}")
 
