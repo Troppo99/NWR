@@ -643,7 +643,7 @@ class BroomDetector:
 
             query = f"""
             INSERT INTO {table} (cam, timestamp_start, timestamp_done, percentage, image_done, isdiscipline)
-            VALUES (%s, %s, %s, %s, %s, %s, %s)
+            VALUES (%s, %s, %s, %s, %s, %s)
             """
             cursor.execute(
                 query,
