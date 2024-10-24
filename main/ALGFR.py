@@ -22,13 +22,15 @@ class CarpalDetector:
         CARPAL_CONFIDENCE_THRESHOLD=0.5,
         carpal_model="yolo11l-pose.pt",
         camera_name=None,
-        new_size=None,
+        new_size=(960, 540),
         rtsp_url=None,
+        window_size=(540, 360)
     ):
         self.CARPAL_CONFIDENCE_THRESHOLD = CARPAL_CONFIDENCE_THRESHOLD
         self.CARPAL_ABSENCE_THRESHOLD = CARPAL_ABSENCE_THRESHOLD
         self.CARPAL_TOUCH_THRESHOLD = CARPAL_TOUCH_THRESHOLD
         self.CARPAL_PERCENTAGE_GREEN_THRESHOLD = CARPAL_PERCENTAGE_GREEN_THRESHOLD
+        self.window_width, self.window_height = window_size
         self.new_width, self.new_height = new_size
         self.scale_x = self.new_width / 1280
         self.scale_y = self.new_height / 720
@@ -491,7 +493,7 @@ class CarpalDetector:
 
         window_name = f"BROOM{self.idx} : {self.camera_name}"
         cv2.namedWindow(window_name, cv2.WINDOW_NORMAL)
-        cv2.resizeWindow(window_name, self.new_width, self.new_height)
+        cv2.resizeWindow(window_name, self.window_width, self.window_height)
 
         while True:
             if self.stop_event.is_set():
@@ -538,13 +540,13 @@ class CarpalDetector:
         cv2.destroyAllWindows()
         self.frame_thread.join()
 
-def run_carpal(CARPAL_ABSENCE_THRESHOLD, CARPAL_TOUCH_THRESHOLD, CARPAL_PERCENTAGE_GREEN_THRESHOLD, camera_name, new_size=(360, 202)):
+def run_carpal(CARPAL_ABSENCE_THRESHOLD, CARPAL_TOUCH_THRESHOLD, CARPAL_PERCENTAGE_GREEN_THRESHOLD, camera_name, window_size=(540, 360)):
     detector = CarpalDetector(
         CARPAL_ABSENCE_THRESHOLD=CARPAL_ABSENCE_THRESHOLD,
         CARPAL_TOUCH_THRESHOLD=CARPAL_TOUCH_THRESHOLD,
         CARPAL_PERCENTAGE_GREEN_THRESHOLD=CARPAL_PERCENTAGE_GREEN_THRESHOLD,
         camera_name=camera_name,
-        new_size=new_size,
+        window_size=window_size,
     )
 
     detector.main()
@@ -555,5 +557,5 @@ if __name__ == "__main__":
         CARPAL_TOUCH_THRESHOLD=0,
         CARPAL_PERCENTAGE_GREEN_THRESHOLD=50,
         camera_name="10.5.0.182",
-        new_size=(960, 540),
+        window_size=(540, 360),
     )
