@@ -20,6 +20,7 @@ class CarpalDetector:
         CARPAL_TOUCH_THRESHOLD=0,
         CARPAL_PERCENTAGE_GREEN_THRESHOLD=50,
         CARPAL_CONFIDENCE_THRESHOLD=0.5,
+        carpal_model="yolo11l-pose.pt",
         camera_name=None,
         new_size=None,
         rtsp_url=None,
@@ -72,7 +73,7 @@ class CarpalDetector:
             for idx in range(len(self.borders))
         }
         self.borders_pts = [np.array(border, np.int32) for border in self.scaled_borders]
-        self.carpal_model = YOLO("yolo11l-pose.pt").to("cuda")
+        self.carpal_model = YOLO(carpal_model).to("cuda")
         self.carpal_model.overrides["verbose"] = False
         print(f"Model Carpal device: {next(self.carpal_model.model.parameters()).device}")
 

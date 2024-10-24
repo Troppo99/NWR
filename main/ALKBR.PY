@@ -20,6 +20,7 @@ class BroomDetector:
         BROOM_TOUCH_THRESHOLD=0,
         BROOM_PERCENTAGE_GREEN_THRESHOLD=50,
         BROOM_CONFIDENCE_THRESHOLD = 0.9,
+        broom_model="broom5l_11.pt",
         camera_name=None,
         new_size=None,
         rtsp_url=None,
@@ -72,7 +73,7 @@ class BroomDetector:
             for idx in range(len(self.borders))
         }
         self.borders_pts = [np.array(border, np.int32) for border in self.scaled_borders]
-        self.broom_model = YOLO("broom5l_11.pt").to("cuda")
+        self.broom_model = YOLO(broom_model).to("cuda")
         self.broom_model.overrides["verbose"] = False
         print(f"Model Broom device: {next(self.broom_model.model.parameters()).device}")
 
