@@ -19,7 +19,7 @@ class BroomDetector:
         BROOM_ABSENCE_THRESHOLD=10,
         BROOM_TOUCH_THRESHOLD=0,
         BROOM_PERCENTAGE_GREEN_THRESHOLD=50,
-        BROOM_CONFIDENCE_THRESHOLD = 0.9,
+        BROOM_CONFIDENCE_THRESHOLD=0.9,
         broom_model="broom5l_11.pt",
         camera_name=None,
         new_size=None,
@@ -368,17 +368,11 @@ class BroomDetector:
 
         for result in results:
             keypoints_data = result.keypoints
-            if (
-                keypoints_data is not None
-                and keypoints_data.xy is not None
-                and keypoints_data.conf is not None
-            ):
+            if keypoints_data is not None and keypoints_data.xy is not None and keypoints_data.conf is not None:
                 if keypoints_data.shape[0] > 0:
                     keypoints_array = keypoints_data.xy.cpu().numpy()
                     keypoints_conf = keypoints_data.conf.cpu().numpy()
-                    for keypoints_per_object, keypoints_conf_per_object in zip(
-                        keypoints_array, keypoints_conf
-                    ):
+                    for keypoints_per_object, keypoints_conf_per_object in zip(keypoints_array, keypoints_conf):
                         keypoints_list = []
                         for kp, kp_conf in zip(keypoints_per_object, keypoints_conf_per_object):
                             if kp_conf >= confidence_threshold:
@@ -426,10 +420,7 @@ class BroomDetector:
         results = self.process_model(frame_resized)
         points, coords, keypoint_positions = self.export_frame(results, (0, 255, 0), pairs_broom)
 
-        border_colors = [
-            (0, 255, 0) if state["is_green"] else (0, 255, 255)
-            for state in self.border_states.values()
-        ]
+        border_colors = [(0, 255, 0) if state["is_green"] else (0, 255, 255) for state in self.border_states.values()]
 
         broom_overlapping_any_border = False
 
@@ -473,14 +464,10 @@ class BroomDetector:
             else:
                 if self.broom_absence_timer_start is None:
                     self.broom_absence_timer_start = current_time
-                elif (
-                    current_time - self.broom_absence_timer_start
-                ) >= self.BROOM_ABSENCE_THRESHOLD:
+                elif (current_time - self.broom_absence_timer_start) >= self.BROOM_ABSENCE_THRESHOLD:
                     print(f"Resetting broom borders in percentage {percentage_green:.2f}%")
                     if percentage_green >= self.BROOM_PERCENTAGE_GREEN_THRESHOLD:
-                        print(
-                            f"Green broom border is bigger than {self.BROOM_PERCENTAGE_GREEN_THRESHOLD}% and data is sent to server"
-                        )
+                        print(f"Green broom border is bigger than {self.BROOM_PERCENTAGE_GREEN_THRESHOLD}% and data is sent to server")
                         if self.first_green_time is not None:
                             self.elapsed_time = current_time - self.first_green_time
                         overlay = frame_resized.copy()
@@ -491,9 +478,7 @@ class BroomDetector:
                         minutes, seconds = divmod(int(self.elapsed_time), 60)
                         time_str = f"Elapsed Time: {minutes:02d}:{seconds:02d}"
                         if self.show_text:
-                            cvzone.putTextRect(
-                                frame_resized, time_str, (10, 100), scale=1, thickness=2, offset=5
-                            )
+                            cvzone.putTextRect(frame_resized, time_str, (10, 100), scale=1, thickness=2, offset=5)
                             cvzone.putTextRect(
                                 frame_resized,
                                 f"Percentage of Green Border: {percentage_green:.2f}%",
@@ -512,9 +497,7 @@ class BroomDetector:
                             )
                         image_path = "main/images/green_borders_image_182.jpg"
                         cv2.imwrite(image_path, frame_resized)
-                        self.send_to_server(
-                            "10.5.0.2", percentage_green, self.elapsed_time, image_path
-                        )
+                        self.send_to_server("10.5.0.2", percentage_green, self.elapsed_time, image_path)
 
                     for idx in range(len(self.borders)):
                         self.border_states[idx] = {
@@ -544,9 +527,7 @@ class BroomDetector:
             minutes, seconds = divmod(int(self.elapsed_time), 60)
             time_str = f"Elapsed Time: {minutes:02d}:{seconds:02d}"
             if self.show_text:
-                cvzone.putTextRect(
-                    frame_resized, time_str, (10, 100), scale=1, thickness=2, offset=5
-                )
+                cvzone.putTextRect(frame_resized, time_str, (10, 100), scale=1, thickness=2, offset=5)
                 cvzone.putTextRect(
                     frame_resized,
                     f"Percentage of Green Border: {percentage_green:.2f}%",
@@ -555,9 +536,7 @@ class BroomDetector:
                     thickness=2,
                     offset=5,
                 )
-                cvzone.putTextRect(
-                    frame_resized, f"FPS: {int(self.fps)}", (10, 75), scale=1, thickness=2, offset=5
-                )
+                cvzone.putTextRect(frame_resized, f"FPS: {int(self.fps)}", (10, 75), scale=1, thickness=2, offset=5)
             image_path = "main/images/green_borders_image_182.jpg"
             cv2.imwrite(image_path, frame_resized)
             self.send_to_server("10.5.0.2", percentage_green, self.elapsed_time, image_path)
@@ -588,9 +567,7 @@ class BroomDetector:
             minutes, seconds = divmod(int(self.elapsed_time), 60)
             time_str = f"Elapsed Time: {minutes:02d}:{seconds:02d}"
             if self.show_text:
-                cvzone.putTextRect(
-                    frame_resized, time_str, (10, 100), scale=1, thickness=2, offset=5
-                )
+                cvzone.putTextRect(frame_resized, time_str, (10, 100), scale=1, thickness=2, offset=5)
 
         return frame_resized
 
@@ -610,11 +587,10 @@ class BroomDetector:
 
         try:
             user, password, database, port = server_address(host)
-            connection = pymysql.connect(
-                host=host, user=user, password=password, database=database, port=port
-            )
+            connection = pymysql.connect(host=host, user=user, password=password, database=database, port=port)
             cursor = connection.cursor()
             table = "empbro"
+            activity = "Menyapu Lantai"
             camera_name = self.camera_name
             timestamp_done = datetime.now()
             timestamp_start = timestamp_done - timedelta(seconds=elapsed_time)
@@ -639,13 +615,14 @@ class BroomDetector:
                 binary_image = file.read()
 
             query = f"""
-            INSERT INTO {table} (cam, timestamp_start, timestamp_done, percentage, image_done, isdiscipline)
-            VALUES (%s, %s, %s, %s, %s, %s)
+            INSERT INTO {table} (cam, activity, timestamp_start, timestamp_done, percentage, image_done, isdiscipline)
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
             """
             cursor.execute(
                 query,
                 (
                     camera_name,
+                    activity,
                     timestamp_start_str,
                     timestamp_done_str,
                     percentage_green,
@@ -708,9 +685,7 @@ class BroomDetector:
                     thickness=2,
                     offset=5,
                 )
-                cvzone.putTextRect(
-                    frame_resized, f"FPS: {int(self.fps)}", (10, 75), scale=1, thickness=2, offset=5
-                )
+                cvzone.putTextRect(frame_resized, f"FPS: {int(self.fps)}", (10, 75), scale=1, thickness=2, offset=5)
             cv2.imshow(window_name, frame_resized)
             key = cv2.waitKey(1) & 0xFF
             if key == ord("n"):
@@ -720,6 +695,7 @@ class BroomDetector:
                 self.show_text = not self.show_text
         cv2.destroyAllWindows()
         self.frame_thread.join()
+
 
 def run_broom(BROOM_ABSENCE_THRESHOLD, BROOM_TOUCH_THRESHOLD, BROOM_PERCENTAGE_GREEN_THRESHOLD, camera_name, new_size=(360, 202)):
     detector = BroomDetector(
@@ -731,6 +707,7 @@ def run_broom(BROOM_ABSENCE_THRESHOLD, BROOM_TOUCH_THRESHOLD, BROOM_PERCENTAGE_G
     )
 
     detector.main()
+
 
 if __name__ == "__main__":
     run_broom(

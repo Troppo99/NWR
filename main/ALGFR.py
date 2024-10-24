@@ -410,6 +410,7 @@ class CarpalDetector:
             )
             cursor = connection.cursor()
             table = "empbro"
+            activity = "Mengelap Kaca"
             camera_name = self.camera_name
             timestamp_done = datetime.now()
             timestamp_start = timestamp_done - timedelta(seconds=elapsed_time)
@@ -434,13 +435,14 @@ class CarpalDetector:
                 binary_image = file.read()
 
             query = f"""
-            INSERT INTO {table} (cam, timestamp_start, timestamp_done, percentage, image_done, isdiscipline)
-            VALUES (%s, %s, %s, %s, %s, %s)
+            INSERT INTO {table} (cam, activity, timestamp_start, timestamp_done, percentage, image_done, isdiscipline)
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
             """
             cursor.execute(
                 query,
                 (
                     camera_name,
+                    activity,
                     timestamp_start_str,
                     timestamp_done_str,
                     percentage_green,
