@@ -541,11 +541,11 @@ class CarpalDetector:
 
 def run_carpal(CARPAL_ABSENCE_THRESHOLD, CARPAL_TOUCH_THRESHOLD, CARPAL_PERCENTAGE_GREEN_THRESHOLD, camera_name, new_size):
     detector = CarpalDetector(
-        CARPAL_ABSENCE_THRESHOLD=10,
-        CARPAL_TOUCH_THRESHOLD=0,
-        CARPAL_PERCENTAGE_GREEN_THRESHOLD=50,
-        camera_name="10.5.0.182",
-        new_size=(960, 540),
+        CARPAL_ABSENCE_THRESHOLD=CARPAL_ABSENCE_THRESHOLD,
+        CARPAL_TOUCH_THRESHOLD=CARPAL_TOUCH_THRESHOLD,
+        CARPAL_PERCENTAGE_GREEN_THRESHOLD=CARPAL_PERCENTAGE_GREEN_THRESHOLD,
+        camera_name=camera_name,
+        new_size=new_size,
     )
 
     detector.main()
