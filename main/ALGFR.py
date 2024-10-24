@@ -78,7 +78,7 @@ class CarpalDetector:
         print(f"Model Carpal device: {next(self.carpal_model.model.parameters()).device}")
 
     def camera_config(self, camera_name):
-        carpal_config = {
+        config = {
             "10.5.0.182": [
                 [(1, 305), (65, 261), (56, 188), (1, 221)],
                 [(1, 221), (56, 188), (51, 127), (1, 155)],
@@ -146,9 +146,9 @@ class CarpalDetector:
                 [(1256, 23), (1193, 6), (1254, 4)],
             ],
         }
-        carpal_camera_names = list(carpal_config.keys())
-        carpal_indices = {name: idx + 1 for idx, name in enumerate(carpal_camera_names)}
-        return carpal_config[camera_name], carpal_indices[camera_name]
+        camera_names = list(config.keys())
+        indices = {name: idx + 1 for idx, name in enumerate(camera_names)}
+        return config[camera_name], indices[camera_name]
 
     def process_model(self, frame):
         with torch.no_grad():

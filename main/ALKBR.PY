@@ -78,7 +78,7 @@ class BroomDetector:
         print(f"Model Broom device: {next(self.broom_model.model.parameters()).device}")
 
     def camera_config(self, camera_name):
-        broom_config = {
+        config = {
             "10.5.0.182": [
                 [(29, 493), (107, 444), (168, 543), (81, 598)],
                 [(168, 543), (182, 533), (194, 550), (297, 487), (245, 429), (138, 491)],
@@ -354,9 +354,9 @@ class BroomDetector:
                 [(767, 708), (766, 583), (966, 575), (989, 706)],
             ],
         }
-        broom_camera_names = list(broom_config.keys())
-        broom_indices = {name: idx + 1 for idx, name in enumerate(broom_camera_names)}
-        return broom_config[camera_name], broom_indices[camera_name]
+        camera_names = list(config.keys())
+        indices = {name: idx + 1 for idx, name in enumerate(camera_names)}
+        return config[camera_name], indices[camera_name]
 
     def process_model(self, frame):
         with torch.no_grad():
