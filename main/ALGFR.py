@@ -539,8 +539,7 @@ class CarpalDetector:
         cv2.destroyAllWindows()
         self.frame_thread.join()
 
-
-if __name__ == "__main__":
+def run_carpal(CARPAL_ABSENCE_THRESHOLD, CARPAL_TOUCH_THRESHOLD, CARPAL_PERCENTAGE_GREEN_THRESHOLD, camera_name, new_size):
     detector = CarpalDetector(
         CARPAL_ABSENCE_THRESHOLD=10,
         CARPAL_TOUCH_THRESHOLD=0,
@@ -550,3 +549,12 @@ if __name__ == "__main__":
     )
 
     detector.main()
+
+if __name__ == "__main__":
+    run_carpal(
+        CARPAL_ABSENCE_THRESHOLD=10,
+        CARPAL_TOUCH_THRESHOLD=0,
+        CARPAL_PERCENTAGE_GREEN_THRESHOLD=50,
+        camera_name="10.5.0.182",
+        new_size=(960, 540),
+    )
