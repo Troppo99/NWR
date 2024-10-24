@@ -23,7 +23,7 @@ class CarpalDetector:
         new_size=None,
         rtsp_url=None,
     ):
-        self.CONFIDENCE_THRESHOLD = 0.5
+        self.CONFIDENCE_THRESHOLD_CARPAL = 0.5
         self.CARPAL_ABSENCE_THRESHOLD = CARPAL_ABSENCE_THRESHOLD
         self.CARPAL_TOUCH_THRESHOLD = CARPAL_TOUCH_THRESHOLD
         self.PERCENTAGE_GREEN_THRESHOLD = PERCENTAGE_GREEN_THRESHOLD
@@ -157,37 +157,38 @@ class CarpalDetector:
         points = []
         coords = []
         keypoint_positions = []
-        confidence_threshold = self.CONFIDENCE_THRESHOLD
+        confidence_threshold = self.CONFIDENCE_THRESHOLD_CARPAL
 
         for result in results:
             keypoints_data = result.keypoints
-            if keypoints_data is not None and hasattr(keypoints_data, "xy"):
-                keypoints_array = (keypoints_data.xy.cpu().numpy())
-                if hasattr(keypoints_data, "conf") and keypoints_data.conf is not None:
-                    keypoints_conf = (keypoints_data.conf.cpu().numpy())
+            if (
+                keypoints_data is not None
+                and keypoints_data.xy is not None
+                and keypoints_data.conf is not None
+            ):
+                if keypoints_data.shape[0] > 0:
+                    keypoints_array = keypoints_data.xy.cpu().numpy()
+                    keypoints_conf = keypoints_data.conf.cpu().numpy()
+                    for keypoints_per_object, keypoints_conf_per_object in zip(
+                        keypoints_array, keypoints_conf
+                    ):
+                        keypoints_list = []
+                        for kp, kp_conf in zip(keypoints_per_object, keypoints_conf_per_object):
+                            if kp_conf >= confidence_threshold:
+                                x, y = kp[0], kp[1]
+                                keypoints_list.append((int(x), int(y)))
+                            else:
+                                keypoints_list.append(None)
+                        keypoint_positions.append(keypoints_list)
+                        for point in keypoints_list:
+                            if point is not None:
+                                points.append(point)
+                        for i, j in pairs:
+                            if i < len(keypoints_list) and j < len(keypoints_list):
+                                if keypoints_list[i] is not None and keypoints_list[j] is not None:
+                                    coords.append((keypoints_list[i], keypoints_list[j], color))
                 else:
-                    keypoints_conf = np.ones((keypoints_array.shape[0], keypoints_array.shape[1]))
-
-                for keypoints_per_object, keypoints_conf_per_object in zip(
-                    keypoints_array, keypoints_conf
-                ):
-                    keypoints_list = []
-                    for kp, kp_conf in zip(keypoints_per_object, keypoints_conf_per_object):
-                        x, y = kp
-                        conf = kp_conf
-                        if conf >= confidence_threshold:
-                            keypoints_list.append((int(x), int(y)))
-                            points.append((int(x), int(y)))
-                        else:
-                            keypoints_list.append(None)
-                    keypoint_positions.append(keypoints_list)
-
-                    for i, j in pairs:
-                        if i < len(keypoints_list) and j < len(keypoints_list):
-                            if keypoints_list[i] is not None and keypoints_list[j] is not None:
-                                coords.append((keypoints_list[i], keypoints_list[j], color))
-            else:
-                pass
+                    continue
         return points, coords, keypoint_positions
 
     def frame_capture(self):
@@ -244,11 +245,16 @@ class CarpalDetector:
                 if self.border_states[border_id]["last_carpal_overlap_time"] is None:
                     self.border_states[border_id]["last_carpal_overlap_time"] = current_time
                 else:
-                    delta_time = current_time - self.border_states[border_id]["last_carpal_overlap_time"]
+                    delta_time = (
+                        current_time - self.border_states[border_id]["last_carpal_overlap_time"]
+                    )
                     self.border_states[border_id]["carpal_overlap_time"] += delta_time
                     self.border_states[border_id]["last_carpal_overlap_time"] = current_time
-                
-                if self.border_states[border_id]["carpal_overlap_time"] >= self.CARPAL_TOUCH_THRESHOLD:
+
+                if (
+                    self.border_states[border_id]["carpal_overlap_time"]
+                    >= self.CARPAL_TOUCH_THRESHOLD
+                ):
                     self.border_states[border_id]["is_green"] = True
                     border_colors[border_id] = (0, 255, 0)
             else:
