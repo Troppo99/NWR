@@ -435,7 +435,7 @@ class BroomDetector:
         broom_overlapping_any_border = False
 
         for border_id, border_pt in enumerate(self.borders_pts):
-            sapu_overlapping = False
+            broom_overlapping = False
             for keypoints_list in keypoint_positions:
                 for idx in [2, 3, 4]:
                     if idx < len(keypoints_list):
@@ -443,13 +443,13 @@ class BroomDetector:
                         if kp is not None:
                             result = cv2.pointPolygonTest(border_pt, kp, False)
                             if result >= 0:
-                                sapu_overlapping = True
+                                broom_overlapping = True
                                 broom_overlapping_any_border = True
                                 break
-                if sapu_overlapping:
+                if broom_overlapping:
                     break
 
-            if sapu_overlapping:
+            if broom_overlapping:
                 if self.border_states[border_id]["last_broom_overlap_time"] is None:
                     self.border_states[border_id]["last_broom_overlap_time"] = current_time
                 else:
@@ -579,15 +579,11 @@ class BroomDetector:
                 cv2.line(frame_resized, x, y, color, 2)
             for point in points:
                 cv2.circle(frame_resized, point, 4, (0, 255, 255), -1)
-
         overlay = frame_resized.copy()
         alpha = 0.5
-
         for border_pt, color in zip(self.borders_pts, border_colors):
             cv2.fillPoly(overlay, pts=[border_pt], color=color)
-
         cv2.addWeighted(overlay, alpha, frame_resized, 1 - alpha, 0, frame_resized)
-
         if self.is_counting and self.first_green_time is not None:
             self.elapsed_time = current_time - self.first_green_time
             minutes, seconds = divmod(int(self.elapsed_time), 60)
