@@ -23,7 +23,7 @@ class BroomDetector:
         new_size=None,
         rtsp_url=None,
     ):
-        self.CONFIDENCE_THRESHOLD_BROOM = 0.9
+        self.BROOM_CONFIDENCE_THRESHOLD = 0.9
         self.BROOM_ABSENCE_THRESHOLD = BROOM_ABSENCE_THRESHOLD
         self.BROOM_TOUCH_THRESHOLD = BROOM_TOUCH_THRESHOLD
         self.PERCENTAGE_GREEN_THRESHOLD = PERCENTAGE_GREEN_THRESHOLD
@@ -63,7 +63,7 @@ class BroomDetector:
 
         self.border_states = {
             idx: {
-                "sapu_time": None,
+                "broom_time": None,
                 "is_green": False,
                 "broom_overlap_time": 0.0,
                 "last_broom_overlap_time": None,
@@ -365,7 +365,7 @@ class BroomDetector:
         points = []
         coords = []
         keypoint_positions = []
-        confidence_threshold = self.CONFIDENCE_THRESHOLD_BROOM
+        confidence_threshold = self.BROOM_CONFIDENCE_THRESHOLD
 
         for result in results:
             keypoints_data = result.keypoints

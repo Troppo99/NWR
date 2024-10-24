@@ -23,7 +23,7 @@ class CarpalDetector:
         new_size=None,
         rtsp_url=None,
     ):
-        self.CONFIDENCE_THRESHOLD_CARPAL = 0.5
+        self.CARPAL_CONFIDENCE_THRESHOLD = 0.5
         self.CARPAL_ABSENCE_THRESHOLD = CARPAL_ABSENCE_THRESHOLD
         self.CARPAL_TOUCH_THRESHOLD = CARPAL_TOUCH_THRESHOLD
         self.PERCENTAGE_GREEN_THRESHOLD = PERCENTAGE_GREEN_THRESHOLD
@@ -157,7 +157,7 @@ class CarpalDetector:
         points = []
         coords = []
         keypoint_positions = []
-        confidence_threshold = self.CONFIDENCE_THRESHOLD_CARPAL
+        confidence_threshold = self.CARPAL_CONFIDENCE_THRESHOLD
 
         for result in results:
             keypoints_data = result.keypoints
