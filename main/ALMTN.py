@@ -196,7 +196,7 @@ class MotorDetector:
         for result in results:
             for box in result.boxes:
                 x1, y1, x2, y2 = map(int, box.xyxy[0])
-                conf = math.ceil(box.conf[0] * 100) / 100
+                conf = box.conf[0]
                 class_id = self.motor_model.names[int(box.cls[0])]
                 if conf > self.MOTOR_CONFIDENCE_THRESHOLD and class_id == "motorcycle":
                     boxes_info.append((x1, y1, x2, y2, conf, class_id))
@@ -213,26 +213,35 @@ class MotorDetector:
 
         for border_id, border_pt in enumerate(self.borders_pts):
             motor_overlapping = False
+            border_polygon = np.array(border_pt, dtype=np.int32)
+            border_contour = border_polygon.reshape((-1, 1, 2))
+
             for x1, y1, x2, y2, conf, class_id in boxes_info:
                 if class_id == "motorcycle":
-                    result = cv2.pointPolygonTest(border_pt, (x1, y1), False)
-                    if result >= 0:
+                    # Membuat polygon dari bounding box
+                    box_polygon = np.array([[x1, y1], [x2, y1], [x2, y2], [x1, y2]], dtype=np.int32)
+                    box_contour = box_polygon.reshape((-1, 1, 2))
+
+                    # Menghitung area intersection antara bounding box dan border
+                    intersection = cv2.intersectConvexConvex(border_contour, box_contour)[1]
+                    if intersection is not None and cv2.contourArea(intersection) > 0:
                         motor_overlapping = True
+                        motor_overlapping_any_border = True
                         break
 
-        if motor_overlapping:
-            if self.border_states[border_id]["last_motor_overlap_time"] is None:
-                self.border_states[border_id]["last_motor_overlap_time"] = current_time
-            else:
-                delta_time = current_time - self.border_states[border_id]["last_motor_overlap_time"]
-                self.border_states[border_id]["motor_overlap_time"] += delta_time
-                self.border_states[border_id]["last_motor_overlap_time"] = current_time
+            if motor_overlapping:
+                if self.border_states[border_id]["last_motor_overlap_time"] is None:
+                    self.border_states[border_id]["last_motor_overlap_time"] = current_time
+                else:
+                    delta_time = current_time - self.border_states[border_id]["last_motor_overlap_time"]
+                    self.border_states[border_id]["motor_overlap_time"] += delta_time
+                    self.border_states[border_id]["last_motor_overlap_time"] = current_time
 
-            if self.border_states[border_id]["motor_overlap_time"] >= self.MOTOR_TOUCH_THRESHOLD:
-                self.border_states[border_id]["is_green"] = True
-                border_colors[border_id] = (0, 255, 0)
-        else:
-            self.border_states[border_id]["last_motor_overlap_time"] = None
+                if self.border_states[border_id]["motor_overlap_time"] >= self.MOTOR_TOUCH_THRESHOLD:
+                    self.border_states[border_id]["is_green"] = True
+                    border_colors[border_id] = (0, 255, 0)
+            else:
+                self.border_states[border_id]["last_motor_overlap_time"] = None
 
         green_borders_exist = any(state["is_green"] for state in self.border_states.values())
         if green_borders_exist:
