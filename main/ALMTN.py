@@ -286,7 +286,7 @@ class MotorDetector:
                             )
                         image_path = "main/images/yellow_borders_image_182.jpg"
                         cv2.imwrite(image_path, frame_resized)
-                        self.send_to_server("10.5.0.2", percentage_yellow, self.elapsed_time, image_path)
+                        # self.send_to_server("10.5.0.2", percentage_yellow, self.elapsed_time, image_path)
                     for idx in range(len(self.borders)):
                         self.border_states[idx] = {
                             "is_yellow": False,
@@ -327,7 +327,7 @@ class MotorDetector:
                 cvzone.putTextRect(frame_resized, f"FPS: {int(self.fps)}", (10, self.new_height - 75), scale=1, thickness=2, offset=5)
             image_path = "main/images/yellow_borders_image_182.jpg"
             cv2.imwrite(image_path, frame_resized)
-            self.send_to_server("10.5.0.2", percentage_yellow, self.elapsed_time, image_path)
+            # self.send_to_server("10.5.0.2", percentage_yellow, self.elapsed_time, image_path)
 
             for idx in range(len(self.borders)):
                 self.border_states[idx] = {
