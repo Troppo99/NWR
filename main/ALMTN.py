@@ -114,7 +114,7 @@ class MotorDetector:
             frame_resized, boxes_info = self.process_frame(frame)
             for x1, y1, x2, y2, conf, class_id in boxes_info:
                 cvzone.putTextRect(frame_resized, f"{class_id} {conf:.2f}", (x1, y1), scale=1, thickness=2, offset=5)
-                cvzone.cornerRect(frame_resized, (x1, y1, x2-x1, y2-y1), l=10, t=2, colorR=(0, 255, 0))
+                cvzone.cornerRect(frame_resized, (x1, y1, x2 - x1, y2 - y1), l=10, t=2, colorR=(0, 255, 0))
             cv2.imshow(window_name, frame_resized)
             key = cv2.waitKey(1) & 0xFF
             if key == ord("n"):
