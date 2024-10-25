@@ -3,12 +3,9 @@ import os
 os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
 import cv2
 from ultralytics import YOLO
-import numpy as np
 import time
 import torch
 import cvzone
-import pymysql
-from datetime import datetime, timedelta
 import threading
 import queue
 import math
@@ -34,7 +31,6 @@ class MotorDetector:
             self.rtsp_url = f"rtsp://admin:oracle2015@{camera_name}:554/Streaming/Channels/1"
         else:
             self.rtsp_url = rtsp_url
-        self.show_text = True
         self.frame_queue = queue.Queue(maxsize=10)
         self.stop_event = threading.Event()
         self.frame_thread = None
