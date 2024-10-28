@@ -43,10 +43,30 @@ class MotorDetector:
         self.first_yellow_time = None
         self.is_counting = False
         self.camera_name = camera_name
-        if rtsp_url is None:
-            self.rtsp_url = f"rtsp://admin:oracle2015@{camera_name}:554/Streaming/Channels/1"
+        self.rtsp_url = rtsp_url
+        self.video_fps = None  # Initialize video FPS
+        self.is_local_file = False  # Flag to indicate if rtsp_url is a local file
+
+        if rtsp_url is not None:
+            if os.path.isfile(rtsp_url):
+                # It's a local file
+                self.is_local_file = True
+                cap = cv2.VideoCapture(rtsp_url)
+                self.video_fps = cap.get(cv2.CAP_PROP_FPS)
+                if not self.video_fps or math.isnan(self.video_fps):
+                    self.video_fps = 25  # Default FPS if unable to get
+                cap.release()
+                print(f"Local video file detected. FPS: {self.video_fps}")
+            else:
+                # It's likely an RTSP stream
+                self.rtsp_url = rtsp_url if rtsp_url.startswith("rtsp://") else f"rtsp://admin:oracle2015@{camera_name}:554/Streaming/Channels/1"
+                print(f"RTSP stream detected. URL: {self.rtsp_url}")
+                self.video_fps = None
         else:
-            self.rtsp_url = rtsp_url
+            # Use camera_name to build RTSP URL
+            self.rtsp_url = f"rtsp://admin:oracle2015@{camera_name}:554/Streaming/Channels/1"
+            self.video_fps = None
+
         self.borders, self.idx = self.camera_config(camera_name)
         self.show_text = True
         self.frame_queue = queue.Queue(maxsize=10)
@@ -93,7 +113,7 @@ class MotorDetector:
         }
         camera_names = list(config.keys())
         indices = {name: idx + 1 for idx, name in enumerate(camera_names)}
-        return config[camera_name], indices[camera_name]
+        return config[camera_name], indices.get(camera_name, 0)
 
     def frame_capture(self):
         rtsp_url = self.rtsp_url
@@ -313,8 +333,8 @@ class MotorDetector:
         # Drawing boxes and overlays
         if boxes_info:
             for x1, y1, x2, y2, conf, class_id in boxes_info:
-                cvzone.putTextRect(frame_resized, f"{class_id} {conf:.2f}", (x1, y1), scale=1, thickness=2, offset=5)
-                cvzone.cornerRect(frame_resized, (x1, y1, x2 - x1, y2 - y1), l=10, t=2, colorR=(0, 255, 0))
+                # cvzone.putTextRect(frame_resized, f"{class_id} {conf:.2f}", (x1, y1), scale=1, thickness=2, offset=5, colorR=(0, 255, 255), colorT=(70, 10, 30))
+                cvzone.cornerRect(frame_resized, (x1, y1, x2 - x1, y2 - y1), l=10, t=2, colorR=(0, 255, 255), colorC=(255, 255, 255))
 
         overlay = frame_resized.copy()
         alpha = 0.5
@@ -345,47 +365,92 @@ class MotorDetector:
         process_every_n_frames = 2
         frame_count = 0
 
-        self.frame_thread = threading.Thread(target=self.frame_capture)
-        self.frame_thread.daemon = True
-        self.frame_thread.start()
-
         window_name = f"Motor Detector"
         cv2.namedWindow(window_name, cv2.WINDOW_NORMAL)
         cv2.resizeWindow(window_name, self.window_width, self.window_height)
 
-        while True:
-            if self.stop_event.is_set():
-                break
-            try:
-                frame = self.frame_queue.get(timeout=5)
-            except queue.Empty:
-                continue
+        if self.video_fps is not None:
+            # Local video file, process frames in the main thread
+            cap = cv2.VideoCapture(self.rtsp_url)
+            frame_delay = int(1000 / self.video_fps)  # Delay in milliseconds
 
-            frame_count += 1
-            if frame_count % process_every_n_frames != 0:
-                continue
-            current_time = time.time()
-            time_diff = current_time - self.prev_frame_time
-            if time_diff > 0:
-                self.fps = 1 / time_diff
-            else:
-                self.fps = 0
-            self.prev_frame_time = current_time
-            frame_resized = self.process_frame(frame, current_time)
-            if self.show_text:
-                cvzone.putTextRect(frame_resized, f"FPS: {int(self.fps)}", (10, self.new_height - 75), scale=1, thickness=2, offset=5)
-            cv2.imshow(window_name, frame_resized)
-            key = cv2.waitKey(1) & 0xFF
-            if key == ord("n"):
-                self.stop_event.set()
-                break
-            elif key == ord("s"):
-                self.show_text = not self.show_text
-        cv2.destroyAllWindows()
-        self.frame_thread.join()
+            while cap.isOpened():
+                start_time = time.time()
+                ret, frame = cap.read()
+                if not ret:
+                    print("End of video file or cannot read the frame.")
+                    break
+
+                frame_count += 1
+                if frame_count % process_every_n_frames != 0:
+                    continue
+                current_time = time.time()
+                time_diff = current_time - self.prev_frame_time
+                if time_diff > 0:
+                    self.fps = 1 / time_diff
+                else:
+                    self.fps = 0
+                self.prev_frame_time = current_time
+                frame_resized = self.process_frame(frame, current_time)
+                if self.show_text:
+                    cvzone.putTextRect(frame_resized, f"FPS: {int(self.fps)}", (10, self.new_height - 75), scale=1, thickness=2, offset=5)
+                cv2.imshow(window_name, frame_resized)
+                processing_time = (time.time() - start_time) * 1000  # Convert to milliseconds
+                adjusted_delay = max(int(frame_delay - processing_time), 1)
+                key = cv2.waitKey(adjusted_delay) & 0xFF
+                if key == ord("n"):
+                    break
+                elif key == ord("s"):
+                    self.show_text = not self.show_text
+            cap.release()
+            cv2.destroyAllWindows()
+        else:
+            # RTSP stream, use frame capture thread
+            self.frame_thread = threading.Thread(target=self.frame_capture)
+            self.frame_thread.daemon = True
+            self.frame_thread.start()
+
+            while True:
+                start_time = time.time()
+                if self.stop_event.is_set():
+                    break
+                try:
+                    frame = self.frame_queue.get(timeout=5)
+                except queue.Empty:
+                    continue
+
+                frame_count += 1
+                if frame_count % process_every_n_frames != 0:
+                    continue
+                current_time = time.time()
+                time_diff = current_time - self.prev_frame_time
+                if time_diff > 0:
+                    self.fps = 1 / time_diff
+                else:
+                    self.fps = 0
+                self.prev_frame_time = current_time
+                frame_resized = self.process_frame(frame, current_time)
+                if self.show_text:
+                    cvzone.putTextRect(frame_resized, f"FPS: {int(self.fps)}", (10, self.new_height - 75), scale=1, thickness=2, offset=5)
+                cv2.imshow(window_name, frame_resized)
+                key = cv2.waitKey(1) & 0xFF
+                if key == ord("n"):
+                    self.stop_event.set()
+                    break
+                elif key == ord("s"):
+                    self.show_text = not self.show_text
+            cv2.destroyAllWindows()
+            self.frame_thread.join()
 
 
-def run_motor(MOTOR_ABSENCE_THRESHOLD, MOTOR_TOUCH_THRESHOLD, MOTOR_CONFIDENCE_THRESHOLD, camera_name, window_size=(540, 360), rtsp_url=None):
+def run_motor(
+    MOTOR_ABSENCE_THRESHOLD,
+    MOTOR_TOUCH_THRESHOLD,
+    MOTOR_CONFIDENCE_THRESHOLD,
+    camera_name,
+    window_size=(540, 360),
+    rtsp_url=None,
+):
     detector = MotorDetector(
         MOTOR_ABSENCE_THRESHOLD=MOTOR_ABSENCE_THRESHOLD,
         MOTOR_TOUCH_THRESHOLD=MOTOR_TOUCH_THRESHOLD,
@@ -405,5 +470,5 @@ if __name__ == "__main__":
         MOTOR_CONFIDENCE_THRESHOLD=0,
         camera_name="10.5.0.206",
         window_size=(540, 360),
-        # rtsp_url="videos/1028.mp4",
+        rtsp_url="videos/1028.mp4",
     )
