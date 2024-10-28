@@ -465,8 +465,8 @@ def run_motor(
 
 if __name__ == "__main__":
     run_motor(
-        MOTOR_ABSENCE_THRESHOLD=10,
-        MOTOR_TOUCH_THRESHOLD=3,
+        MOTOR_ABSENCE_THRESHOLD=3,
+        MOTOR_TOUCH_THRESHOLD=5,
         MOTOR_CONFIDENCE_THRESHOLD=0,
         camera_name="10.5.0.206",
         window_size=(540, 360),
