@@ -19,7 +19,6 @@ class MotorDetector:
         self,
         MOTOR_ABSENCE_THRESHOLD=10,
         MOTOR_TOUCH_THRESHOLD=0,
-        MOTOR_PERCENTAGE_YELLOW_THRESHOLD=50,
         MOTOR_CONFIDENCE_THRESHOLD=0.5,
         motor_model="yolo11l.pt",
         camera_name=None,
@@ -30,7 +29,6 @@ class MotorDetector:
         self.MOTOR_CONFIDENCE_THRESHOLD = MOTOR_CONFIDENCE_THRESHOLD
         self.MOTOR_ABSENCE_THRESHOLD = MOTOR_ABSENCE_THRESHOLD
         self.MOTOR_TOUCH_THRESHOLD = MOTOR_TOUCH_THRESHOLD
-        self.MOTOR_PERCENTAGE_YELLOW_THRESHOLD = MOTOR_PERCENTAGE_YELLOW_THRESHOLD
         self.window_width, self.window_height = window_size
         self.new_width, self.new_height = new_size
         self.scale_x = self.new_width / 1280
@@ -64,13 +62,16 @@ class MotorDetector:
 
         self.border_states = {
             idx: {
-                "motor_time": None,
                 "is_yellow": False,
                 "motor_overlap_time": 0.0,
                 "last_motor_overlap_time": None,
+                "motor_absence_timer_start": None,
+                "first_yellow_time": None,
+                "is_counting": False,
             }
             for idx in range(len(self.borders))
         }
+
         self.borders_pts = [np.array(border, np.int32) for border in self.scaled_borders]
         self.motor_model = YOLO(motor_model).to("cuda")
         self.motor_model.overrides["verbose"] = False
@@ -82,12 +83,12 @@ class MotorDetector:
                 [(0, 719), (0, 429), (413, 429), (414, 722)],
                 [(414, 722), (413, 429), (844, 423), (867, 721)],
                 [(867, 721), (844, 423), (1281, 420), (1288, 744)],
-                [(0, 429), (0, 391), (150, 261), (465, 259), (413, 429)],
+                [(0, 429), (0, 391), (179, 266), (465, 259), (413, 429)],
                 [(413, 429), (465, 259), (861, 262), (844, 423)],
                 [(844, 423), (861, 262), (1248, 287), (1276, 302), (1281, 420)],
-                [(150, 261), (269, 184), (491, 183), (465, 259)],
-                [(465, 259), (491, 183), (853, 205), (861, 262)],
-                [(861, 262), (853, 205), (915, 215), (915, 191), (1077, 212), (1152, 229), (1248, 287)],
+                [(179, 266), (280, 196), (492, 189), (465, 259)],
+                [(465, 259), (492, 189), (853, 205), (861, 262)],
+                [(861, 262), (853, 205), (915, 215), (918, 201), (1069, 221), (1156, 241), (1248, 287)],
             ],
         }
         camera_names = list(config.keys())
@@ -117,7 +118,7 @@ class MotorDetector:
                     pass
             cap.release()
 
-    def send_to_server(self, host, percentage_yellow, elapsed_time, image_path):
+    def send_to_server(self, host, elapsed_time, image_path):
         def server_address(host):
             if host == "localhost":
                 user = "root"
@@ -161,8 +162,8 @@ class MotorDetector:
                 binary_image = file.read()
 
             query = f"""
-            INSERT INTO {table} (cam, activity, timestamp_start, timestamp_done, percentage, image_done, isdiscipline)
-            VALUES (%s, %s, %s, %s, %s, %s, %s)
+            INSERT INTO {table} (cam, activity, timestamp_start, timestamp_done, image_done, isdiscipline)
+            VALUES (%s, %s, %s, %s, %s, %s)
             """
             cursor.execute(
                 query,
@@ -171,7 +172,6 @@ class MotorDetector:
                     activity,
                     timestamp_start_str,
                     timestamp_done_str,
-                    percentage_yellow,
                     binary_image,
                     isdiscipline,
                 ),
@@ -202,14 +202,13 @@ class MotorDetector:
                     boxes_info.append((x1, y1, x2, y2, conf, class_id))
         return boxes_info
 
-    def process_frame(self, frame, current_time, percentage_yellow):
+
+    def process_frame(self, frame, current_time):
         frame_resized = cv2.resize(frame, (self.new_width, self.new_height))
         results = self.process_model(frame_resized)
         boxes_info = self.export_frame(results)
 
-        border_colors = [(0, 255, 255) if state["is_yellow"] else (0, 255, 0) for state in self.border_states.values()]
-
-        motor_overlapping_any_border = False
+        border_colors = []
 
         for border_id, border_pt in enumerate(self.borders_pts):
             motor_overlapping = False
@@ -218,143 +217,123 @@ class MotorDetector:
 
             for x1, y1, x2, y2, conf, class_id in boxes_info:
                 if class_id == "motorcycle":
-                    # Membuat polygon dari bounding box
+                    # Create polygon from bounding box
                     box_polygon = np.array([[x1, y1], [x2, y1], [x2, y2], [x1, y2]], dtype=np.int32)
                     box_contour = box_polygon.reshape((-1, 1, 2))
 
-                    # Menghitung area intersection antara bounding box dan border
+                    # Compute intersection area between bounding box and border
                     intersection = cv2.intersectConvexConvex(border_contour, box_contour)[1]
                     if intersection is not None and cv2.contourArea(intersection) > 0:
                         motor_overlapping = True
-                        motor_overlapping_any_border = True
                         break
 
+            state = self.border_states[border_id]
+
             if motor_overlapping:
-                if self.border_states[border_id]["last_motor_overlap_time"] is None:
-                    self.border_states[border_id]["last_motor_overlap_time"] = current_time
+                if state["last_motor_overlap_time"] is None:
+                    state["last_motor_overlap_time"] = current_time
                 else:
-                    delta_time = current_time - self.border_states[border_id]["last_motor_overlap_time"]
-                    self.border_states[border_id]["motor_overlap_time"] += delta_time
-                    self.border_states[border_id]["last_motor_overlap_time"] = current_time
+                    delta_time = current_time - state["last_motor_overlap_time"]
+                    state["motor_overlap_time"] += delta_time
+                    state["last_motor_overlap_time"] = current_time
 
-                if self.border_states[border_id]["motor_overlap_time"] >= self.MOTOR_TOUCH_THRESHOLD:
-                    self.border_states[border_id]["is_yellow"] = True
-                    border_colors[border_id] = (0, 255, 255)
+                if state["motor_overlap_time"] >= self.MOTOR_TOUCH_THRESHOLD:
+                    state["is_yellow"] = True
+
+                # Reset absence timer
+                state["motor_absence_timer_start"] = None
+
+                if not state["is_counting"]:
+                    state["first_yellow_time"] = current_time
+                    state["is_counting"] = True
+
             else:
-                self.border_states[border_id]["last_motor_overlap_time"] = None
+                state["last_motor_overlap_time"] = None
 
-        yellow_borders_exist = any(state["is_yellow"] for state in self.border_states.values())
-        if yellow_borders_exist:
-            if not self.is_counting:
-                self.first_yellow_time = current_time
-                self.is_counting = True
-            if motor_overlapping_any_border:
-                self.motor_absence_timer_start = current_time
+                if state["motor_absence_timer_start"] is None:
+                    state["motor_absence_timer_start"] = current_time
+                else:
+                    absence_time = current_time - state["motor_absence_timer_start"]
+                    if absence_time >= self.MOTOR_ABSENCE_THRESHOLD and state["is_yellow"]:
+                        # Reset the border
+                        state["is_yellow"] = False
+                        state["motor_overlap_time"] = 0.0
+                        state["last_motor_overlap_time"] = None
+                        state["motor_absence_timer_start"] = None
+
+                        # Compute elapsed time
+                        if state["first_yellow_time"] is not None:
+                            elapsed_time = current_time - state["first_yellow_time"]
+                            state["first_yellow_time"] = None
+                            state["is_counting"] = False
+
+                            # Send data for this border
+                            print(f"Border {border_id} reset after being yellow for {elapsed_time:.2f} seconds.")
+                            overlay = frame_resized.copy()
+                            alpha = 0.5
+                            # Fill only the current border
+                            cv2.fillPoly(overlay, pts=[border_pt], color=(0, 255, 255))
+                            cv2.addWeighted(overlay, alpha, frame_resized, 1 - alpha, 0, frame_resized)
+
+                            if self.show_text:
+                                minutes, seconds = divmod(int(elapsed_time), 60)
+                                time_str = f"Elapsed Time Border {border_id}: {minutes:02d}:{seconds:02d}"
+                                cvzone.putTextRect(
+                                    frame_resized,
+                                    time_str,
+                                    (10, self.new_height - 100 - 25 * border_id),
+                                    scale=1,
+                                    thickness=2,
+                                    offset=5,
+                                )
+                                cvzone.putTextRect(
+                                    frame_resized,
+                                    f"FPS: {int(self.fps)}",
+                                    (10, self.new_height - 75),
+                                    scale=1,
+                                    thickness=2,
+                                    offset=5,
+                                )
+                            image_path = f"main/images/border_{border_id}_reset.jpg"
+                            cv2.imwrite(image_path, frame_resized)
+                            # Adjust the send_to_server call to match your needs
+                            # self.send_to_server("10.5.0.2", elapsed_time, image_path)
+
+            # Update border_colors
+            if state["is_yellow"]:
+                border_colors.append((0, 255, 255))
             else:
-                if self.motor_absence_timer_start is None:
-                    self.motor_absence_timer_start = current_time
-                elif (current_time - self.motor_absence_timer_start) >= self.MOTOR_ABSENCE_THRESHOLD:
-                    print(f"Resetting motor borders in percentage {percentage_yellow:.2f}%")
-                    if percentage_yellow >= self.MOTOR_PERCENTAGE_YELLOW_THRESHOLD:
-                        print(f"Yellow motor border is bigger than {self.MOTOR_PERCENTAGE_YELLOW_THRESHOLD}% and data is sent to server")
-                        if self.first_yellow_time is not None:
-                            self.elapsed_time = current_time - self.first_yellow_time
-                        overlay = frame_resized.copy()
-                        alpha = 0.5
-                        for border_pt, color in zip(self.borders_pts, border_colors):
-                            cv2.fillPoly(overlay, pts=[border_pt], color=color)
-                        cv2.addWeighted(overlay, alpha, frame_resized, 1 - alpha, 0, frame_resized)
-                        minutes, seconds = divmod(int(self.elapsed_time), 60)
-                        time_str = f"Elapsed Time: {minutes:02d}:{seconds:02d}"
-                        if self.show_text:
-                            cvzone.putTextRect(frame_resized, time_str, (10, self.new_height - 100), scale=1, thickness=2, offset=5)
-                            cvzone.putTextRect(
-                                frame_resized,
-                                f"Percentage of Yellow Border: {percentage_yellow:.2f}%",
-                                (10, self.new_height - 50),
-                                scale=1,
-                                thickness=2,
-                                offset=5,
-                            )
-                            cvzone.putTextRect(
-                                frame_resized,
-                                f"FPS: {int(self.fps)}",
-                                (10, self.new_height - 75),
-                                scale=1,
-                                thickness=2,
-                                offset=5,
-                            )
-                        image_path = "main/images/yellow_borders_image_182.jpg"
-                        cv2.imwrite(image_path, frame_resized)
-                        # self.send_to_server("10.5.0.2", percentage_yellow, self.elapsed_time, image_path)
-                    for idx in range(len(self.borders)):
-                        self.border_states[idx] = {
-                            "is_yellow": False,
-                            "motor_overlap_time": 0.0,
-                            "last_motor_overlap_time": None,
-                        }
-                        border_colors[idx] = (0, 255, 255)
-                    self.first_yellow_time = None
-                    self.is_counting = False
-                    self.motor_absence_timer_start = None
-        else:
-            self.motor_absence_timer_start = None
-            if self.is_counting:
-                self.first_yellow_time = None
-                self.is_counting = False
+                border_colors.append((0, 255, 0))
 
-        if percentage_yellow == 100:
-            print("Percentage motor yellow is 100%, performing immediate reset and data send.")
-            if self.first_yellow_time is not None:
-                self.elapsed_time = current_time - self.first_yellow_time
-            overlay = frame_resized.copy()
-            alpha = 0.5
-            for border_pt, color in zip(self.borders_pts, border_colors):
-                cv2.fillPoly(overlay, pts=[border_pt], color=color)
-            cv2.addWeighted(overlay, alpha, frame_resized, 1 - alpha, 0, frame_resized)
-            minutes, seconds = divmod(int(self.elapsed_time), 60)
-            time_str = f"Elapsed Time: {minutes:02d}:{seconds:02d}"
-            if self.show_text:
-                cvzone.putTextRect(frame_resized, time_str, (10, self.new_height - 100), scale=1, thickness=2, offset=5)
-                cvzone.putTextRect(
-                    frame_resized,
-                    f"Percentage of Yellow Border: {percentage_yellow:.2f}%",
-                    (10, self.new_height - 50),
-                    scale=1,
-                    thickness=2,
-                    offset=5,
-                )
-                cvzone.putTextRect(frame_resized, f"FPS: {int(self.fps)}", (10, self.new_height - 75), scale=1, thickness=2, offset=5)
-            image_path = "main/images/yellow_borders_image_182.jpg"
-            cv2.imwrite(image_path, frame_resized)
-            # self.send_to_server("10.5.0.2", percentage_yellow, self.elapsed_time, image_path)
-
-            for idx in range(len(self.borders)):
-                self.border_states[idx] = {
-                    "is_yellow": False,
-                    "motor_overlap_time": 0.0,
-                    "last_motor_overlap_time": None,
-                }
-                border_colors[idx] = (0, 255, 255)
-            self.first_yellow_time = None
-            self.is_counting = False
-            self.motor_absence_timer_start = None
-
+        # Drawing boxes and overlays
         if boxes_info:
             for x1, y1, x2, y2, conf, class_id in boxes_info:
                 cvzone.putTextRect(frame_resized, f"{class_id} {conf:.2f}", (x1, y1), scale=1, thickness=2, offset=5)
                 cvzone.cornerRect(frame_resized, (x1, y1, x2 - x1, y2 - y1), l=10, t=2, colorR=(0, 255, 0))
+
         overlay = frame_resized.copy()
         alpha = 0.5
         for border_pt, color in zip(self.borders_pts, border_colors):
             cv2.fillPoly(overlay, pts=[border_pt], color=color)
         cv2.addWeighted(overlay, alpha, frame_resized, 1 - alpha, 0, frame_resized)
-        if self.is_counting and self.first_yellow_time is not None:
-            self.elapsed_time = current_time - self.first_yellow_time
-            minutes, seconds = divmod(int(self.elapsed_time), 60)
-            time_str = f"Elapsed Time: {minutes:02d}:{seconds:02d}"
-            if self.show_text:
-                cvzone.putTextRect(frame_resized, time_str, (10, self.new_height - 100), scale=1, thickness=2, offset=5)
+
+        # Optionally, display per-border elapsed times
+        if self.show_text:
+            for border_id, state in self.border_states.items():
+                if state["is_counting"]:
+                    elapsed_time = current_time - state["first_yellow_time"]
+                    minutes, seconds = divmod(int(elapsed_time), 60)
+                    time_str = f"Border {border_id}: {minutes:02d}:{seconds:02d}"
+                    cvzone.putTextRect(
+                        frame_resized,
+                        time_str,
+                        (10, self.new_height - 100 - 25 * border_id),
+                        scale=1,
+                        thickness=2,
+                        offset=5,
+                    )
+            cvzone.putTextRect(frame_resized, f"FPS: {int(self.fps)}", (10, self.new_height - 75), scale=1, thickness=2, offset=5)
+
         return frame_resized
 
     def main(self):
@@ -387,19 +366,8 @@ class MotorDetector:
             else:
                 self.fps = 0
             self.prev_frame_time = current_time
-            total_borders = len(self.borders)
-            yellow_borders = sum(1 for state in self.border_states.values() if state["is_yellow"])
-            percentage_yellow = (yellow_borders / total_borders) * 100
-            frame_resized = self.process_frame(frame, current_time, percentage_yellow)
+            frame_resized = self.process_frame(frame, current_time)
             if self.show_text:
-                cvzone.putTextRect(
-                    frame_resized,
-                    f"Percentage of Yellow Border: {percentage_yellow:.2f}%",
-                    (10, self.new_height - 50),
-                    scale=1,
-                    thickness=2,
-                    offset=5,
-                )
                 cvzone.putTextRect(frame_resized, f"FPS: {int(self.fps)}", (10, self.new_height - 75), scale=1, thickness=2, offset=5)
             cv2.imshow(window_name, frame_resized)
             key = cv2.waitKey(1) & 0xFF
@@ -412,11 +380,10 @@ class MotorDetector:
         self.frame_thread.join()
 
 
-def run_motor(MOTOR_ABSENCE_THRESHOLD, MOTOR_TOUCH_THRESHOLD, MOTOR_PERCENTAGE_YELLOW_THRESHOLD, MOTOR_CONFIDENCE_THRESHOLD, camera_name, window_size=(540, 360)):
+def run_motor(MOTOR_ABSENCE_THRESHOLD, MOTOR_TOUCH_THRESHOLD, MOTOR_CONFIDENCE_THRESHOLD, camera_name, window_size=(540, 360)):
     detector = MotorDetector(
         MOTOR_ABSENCE_THRESHOLD=MOTOR_ABSENCE_THRESHOLD,
         MOTOR_TOUCH_THRESHOLD=MOTOR_TOUCH_THRESHOLD,
-        MOTOR_PERCENTAGE_YELLOW_THRESHOLD=MOTOR_PERCENTAGE_YELLOW_THRESHOLD,
         MOTOR_CONFIDENCE_THRESHOLD=MOTOR_CONFIDENCE_THRESHOLD,
         camera_name=camera_name,
         window_size=window_size,
@@ -428,8 +395,7 @@ def run_motor(MOTOR_ABSENCE_THRESHOLD, MOTOR_TOUCH_THRESHOLD, MOTOR_PERCENTAGE_Y
 if __name__ == "__main__":
     run_motor(
         MOTOR_ABSENCE_THRESHOLD=10,
-        MOTOR_TOUCH_THRESHOLD=0,
-        MOTOR_PERCENTAGE_YELLOW_THRESHOLD=50,
+        MOTOR_TOUCH_THRESHOLD=3,
         MOTOR_CONFIDENCE_THRESHOLD=0,
         camera_name="10.5.0.206",
         window_size=(540, 360),
