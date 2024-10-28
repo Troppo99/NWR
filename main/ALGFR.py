@@ -435,8 +435,14 @@ class CarpalDetector:
             connection = pymysql.connect(host=host, user=user, password=password, database=database, port=port)
             cursor = connection.cursor()
             table = "empbro"
-            activity = "Mengelap Kaca"
+            category = "Mengelap Kaca"
             camera_name = self.camera_name
+            if camera_name == "10.5.0.182":
+                camera_name = "OFFICE2"
+            elif camera_name == "10.5.0.170":
+                camera_name = "OFFICE1"
+            elif camera_name == "10.5.0.161":
+                camera_name = "OFFICE3"
             timestamp_done = datetime.now()
             timestamp_start = timestamp_done - timedelta(seconds=elapsed_time)
 
@@ -460,14 +466,14 @@ class CarpalDetector:
                 binary_image = file.read()
 
             query = f"""
-            INSERT INTO {table} (cam, activity, timestamp_start, timestamp_done, percentage, image_done, isdiscipline)
+            INSERT INTO {table} (cam, category, timestamp_start, timestamp_done, percentage, image_done, isdiscipline)
             VALUES (%s, %s, %s, %s, %s, %s, %s)
             """
             cursor.execute(
                 query,
                 (
                     camera_name,
-                    activity,
+                    category,
                     timestamp_start_str,
                     timestamp_done_str,
                     percentage_green,
