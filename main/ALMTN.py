@@ -405,5 +405,5 @@ if __name__ == "__main__":
         MOTOR_CONFIDENCE_THRESHOLD=0,
         camera_name="10.5.0.206",
         window_size=(540, 360),
-        rtsp_url="videos/1028.mp4",
+        # rtsp_url="videos/1028.mp4",
     )
