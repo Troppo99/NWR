@@ -14,18 +14,7 @@ import queue
 
 
 class CarpalDetector:
-    def __init__(
-        self,
-        CARPAL_ABSENCE_THRESHOLD=10,
-        CARPAL_TOUCH_THRESHOLD=0,
-        CARPAL_PERCENTAGE_GREEN_THRESHOLD=50,
-        CARPAL_CONFIDENCE_THRESHOLD=0.5,
-        carpal_model="yolo11l-pose.pt",
-        camera_name=None,
-        new_size=(960, 540),
-        rtsp_url=None,
-        window_size=(540, 360)
-    ):
+    def __init__(self, CARPAL_ABSENCE_THRESHOLD=10, CARPAL_TOUCH_THRESHOLD=0, CARPAL_PERCENTAGE_GREEN_THRESHOLD=50, CARPAL_CONFIDENCE_THRESHOLD=0.5, carpal_model="yolo11l-pose.pt", camera_name=None, new_size=(960, 540), rtsp_url=None, window_size=(540, 360)):
         self.CARPAL_CONFIDENCE_THRESHOLD = CARPAL_CONFIDENCE_THRESHOLD
         self.CARPAL_ABSENCE_THRESHOLD = CARPAL_ABSENCE_THRESHOLD
         self.CARPAL_TOUCH_THRESHOLD = CARPAL_TOUCH_THRESHOLD
@@ -162,17 +151,11 @@ class CarpalDetector:
 
         for result in results:
             keypoints_data = result.keypoints
-            if (
-                keypoints_data is not None
-                and keypoints_data.xy is not None
-                and keypoints_data.conf is not None
-            ):
+            if keypoints_data is not None and keypoints_data.xy is not None and keypoints_data.conf is not None:
                 if keypoints_data.shape[0] > 0:
                     keypoints_array = keypoints_data.xy.cpu().numpy()
                     keypoints_conf = keypoints_data.conf.cpu().numpy()
-                    for keypoints_per_object, keypoints_conf_per_object in zip(
-                        keypoints_array, keypoints_conf
-                    ):
+                    for keypoints_per_object, keypoints_conf_per_object in zip(keypoints_array, keypoints_conf):
                         keypoints_list = []
                         for kp, kp_conf in zip(keypoints_per_object, keypoints_conf_per_object):
                             if kp_conf >= confidence_threshold:
@@ -180,6 +163,37 @@ class CarpalDetector:
                                 keypoints_list.append((int(x), int(y)))
                             else:
                                 keypoints_list.append(None)
+
+                        # Perpanjangan titik 9 dan 10
+                        # Titik 9
+                        if keypoints_list[7] and keypoints_list[9]:
+                            kp7 = keypoints_list[7]
+                            kp9 = keypoints_list[9]
+                            vx = kp9[0] - kp7[0]
+                            vy = kp9[1] - kp7[1]
+                            norm = (vx**2 + vy**2) ** 0.5
+                            if norm != 0:
+                                vx /= norm
+                                vy /= norm
+                                extension_length = 5  # Panjang perpanjangan
+                                x_new = int(kp9[0] + vx * extension_length)
+                                y_new = int(kp9[1] + vy * extension_length)
+                                keypoints_list[9] = (x_new, y_new)
+                        # Titik 10
+                        if keypoints_list[8] and keypoints_list[10]:
+                            kp8 = keypoints_list[8]
+                            kp10 = keypoints_list[10]
+                            vx = kp10[0] - kp8[0]
+                            vy = kp10[1] - kp8[1]
+                            norm = (vx**2 + vy**2) ** 0.5
+                            if norm != 0:
+                                vx /= norm
+                                vy /= norm
+                                extension_length = 5  # Panjang perpanjangan
+                                x_new = int(kp10[0] + vx * extension_length)
+                                y_new = int(kp10[1] + vy * extension_length)
+                                keypoints_list[10] = (x_new, y_new)
+
                         keypoint_positions.append(keypoints_list)
                         for point in keypoints_list:
                             if point is not None:
@@ -220,10 +234,7 @@ class CarpalDetector:
         results = self.process_model(frame_resized)
         points, coords, keypoint_positions = self.export_frame(results, (0, 255, 0), pairs_human)
 
-        border_colors = [
-            (0, 255, 0) if state["is_green"] else (0, 255, 255)
-            for state in self.border_states.values()
-        ]
+        border_colors = [(0, 255, 0) if state["is_green"] else (0, 255, 255) for state in self.border_states.values()]
 
         carpal_overlapping_any_border = False
 
@@ -234,6 +245,7 @@ class CarpalDetector:
                     if idx < len(keypoints_list):
                         kp = keypoints_list[idx]
                         if kp is not None:
+                            # Periksa overlap dengan border
                             result = cv2.pointPolygonTest(border_pt, kp, False)
                             if result >= 0:
                                 carpal_overlapping = True
@@ -246,16 +258,11 @@ class CarpalDetector:
                 if self.border_states[border_id]["last_carpal_overlap_time"] is None:
                     self.border_states[border_id]["last_carpal_overlap_time"] = current_time
                 else:
-                    delta_time = (
-                        current_time - self.border_states[border_id]["last_carpal_overlap_time"]
-                    )
+                    delta_time = current_time - self.border_states[border_id]["last_carpal_overlap_time"]
                     self.border_states[border_id]["carpal_overlap_time"] += delta_time
                     self.border_states[border_id]["last_carpal_overlap_time"] = current_time
 
-                if (
-                    self.border_states[border_id]["carpal_overlap_time"]
-                    >= self.CARPAL_TOUCH_THRESHOLD
-                ):
+                if self.border_states[border_id]["carpal_overlap_time"] >= self.CARPAL_TOUCH_THRESHOLD:
                     self.border_states[border_id]["is_green"] = True
                     border_colors[border_id] = (0, 255, 0)
             else:
@@ -271,14 +278,10 @@ class CarpalDetector:
             else:
                 if self.carpal_absence_timer_start is None:
                     self.carpal_absence_timer_start = current_time
-                elif (
-                    current_time - self.carpal_absence_timer_start
-                ) >= self.CARPAL_ABSENCE_THRESHOLD:
+                elif (current_time - self.carpal_absence_timer_start) >= self.CARPAL_ABSENCE_THRESHOLD:
                     print(f"Resetting carpal borders in percentage {percentage_green:.2f}%")
                     if percentage_green >= self.CARPAL_PERCENTAGE_GREEN_THRESHOLD:
-                        print(
-                            f"Green carpal border is bigger than {self.CARPAL_PERCENTAGE_GREEN_THRESHOLD}% and data is sent to server"
-                        )
+                        print(f"Green carpal border is bigger than {self.CARPAL_PERCENTAGE_GREEN_THRESHOLD}% and data is sent to server")
                         if self.first_green_time is not None:
                             self.elapsed_time = current_time - self.first_green_time
                         overlay = frame_resized.copy()
@@ -289,13 +292,11 @@ class CarpalDetector:
                         minutes, seconds = divmod(int(self.elapsed_time), 60)
                         time_str = f"Elapsed Time: {minutes:02d}:{seconds:02d}"
                         if self.show_text:
-                            cvzone.putTextRect(
-                                frame_resized, time_str, (10, self.new_height-100), scale=1, thickness=2, offset=5
-                            )
+                            cvzone.putTextRect(frame_resized, time_str, (10, self.new_height - 100), scale=1, thickness=2, offset=5)
                             cvzone.putTextRect(
                                 frame_resized,
                                 f"Percentage of Green Border: {percentage_green:.2f}%",
-                                (10, self.new_height-50),
+                                (10, self.new_height - 50),
                                 scale=1,
                                 thickness=2,
                                 offset=5,
@@ -303,16 +304,14 @@ class CarpalDetector:
                             cvzone.putTextRect(
                                 frame_resized,
                                 f"FPS: {int(self.fps)}",
-                                (10, self.new_height-75),
+                                (10, self.new_height - 75),
                                 scale=1,
                                 thickness=2,
                                 offset=5,
                             )
                         image_path = "main/images/green_borders_image_182.jpg"
                         cv2.imwrite(image_path, frame_resized)
-                        self.send_to_server(
-                            "10.5.0.2", percentage_green, self.elapsed_time, image_path
-                        )
+                        self.send_to_server("10.5.0.2", percentage_green, self.elapsed_time, image_path)
                     for idx in range(len(self.borders)):
                         self.border_states[idx] = {
                             "is_green": False,
@@ -341,20 +340,16 @@ class CarpalDetector:
             minutes, seconds = divmod(int(self.elapsed_time), 60)
             time_str = f"Elapsed Time: {minutes:02d}:{seconds:02d}"
             if self.show_text:
-                cvzone.putTextRect(
-                    frame_resized, time_str, (10, self.new_height-100), scale=1, thickness=2, offset=5
-                )
+                cvzone.putTextRect(frame_resized, time_str, (10, self.new_height - 100), scale=1, thickness=2, offset=5)
                 cvzone.putTextRect(
                     frame_resized,
                     f"Percentage of Green Border: {percentage_green:.2f}%",
-                    (10, self.new_height-50),
+                    (10, self.new_height - 50),
                     scale=1,
                     thickness=2,
                     offset=5,
                 )
-                cvzone.putTextRect(
-                    frame_resized, f"FPS: {int(self.fps)}", (10, self.new_height-75), scale=1, thickness=2, offset=5
-                )
+                cvzone.putTextRect(frame_resized, f"FPS: {int(self.fps)}", (10, self.new_height - 75), scale=1, thickness=2, offset=5)
             image_path = "main/images/green_borders_image_182.jpg"
             cv2.imwrite(image_path, frame_resized)
             self.send_to_server("10.5.0.2", percentage_green, self.elapsed_time, image_path)
@@ -370,11 +365,20 @@ class CarpalDetector:
             self.is_counting = False
             self.carpal_absence_timer_start = None
 
-        if points and coords:
+        # Menggambar keypoints dengan ukuran lingkaran berbeda
+        if keypoint_positions:
+            for keypoints_list in keypoint_positions:
+                for idx, point in enumerate(keypoints_list):
+                    if point is not None:
+                        if idx == 9 or idx == 10:
+                            radius = 10  # Radius lebih besar untuk titik 9 dan 10
+                        else:
+                            radius = 5  # Radius default
+                        cv2.circle(frame_resized, point, radius, (0, 255, 255), -1)
+            # Menggambar garis antar keypoints
             for x, y, color in coords:
                 cv2.line(frame_resized, x, y, color, 2)
-            for point in points:
-                cv2.circle(frame_resized, point, 4, (0, 255, 255), -1)
+
         overlay = frame_resized.copy()
         alpha = 0.5
         for border_pt, color in zip(self.borders_pts, border_colors):
@@ -385,9 +389,7 @@ class CarpalDetector:
             minutes, seconds = divmod(int(self.elapsed_time), 60)
             time_str = f"Elapsed Time: {minutes:02d}:{seconds:02d}"
             if self.show_text:
-                cvzone.putTextRect(
-                    frame_resized, time_str, (10, self.new_height-100), scale=1, thickness=2, offset=5
-                )
+                cvzone.putTextRect(frame_resized, time_str, (10, self.new_height - 100), scale=1, thickness=2, offset=5)
 
         return frame_resized
 
@@ -550,6 +552,7 @@ def run_carpal(CARPAL_ABSENCE_THRESHOLD, CARPAL_TOUCH_THRESHOLD, CARPAL_PERCENTA
     )
 
     detector.main()
+
 
 if __name__ == "__main__":
     run_carpal(
