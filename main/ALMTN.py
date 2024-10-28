@@ -385,13 +385,14 @@ class MotorDetector:
         self.frame_thread.join()
 
 
-def run_motor(MOTOR_ABSENCE_THRESHOLD, MOTOR_TOUCH_THRESHOLD, MOTOR_CONFIDENCE_THRESHOLD, camera_name, window_size=(540, 360)):
+def run_motor(MOTOR_ABSENCE_THRESHOLD, MOTOR_TOUCH_THRESHOLD, MOTOR_CONFIDENCE_THRESHOLD, camera_name, window_size=(540, 360), rtsp_url=None):
     detector = MotorDetector(
         MOTOR_ABSENCE_THRESHOLD=MOTOR_ABSENCE_THRESHOLD,
         MOTOR_TOUCH_THRESHOLD=MOTOR_TOUCH_THRESHOLD,
         MOTOR_CONFIDENCE_THRESHOLD=MOTOR_CONFIDENCE_THRESHOLD,
         camera_name=camera_name,
         window_size=window_size,
+        rtsp_url=rtsp_url,
     )
 
     detector.main()
@@ -404,4 +405,5 @@ if __name__ == "__main__":
         MOTOR_CONFIDENCE_THRESHOLD=0,
         camera_name="10.5.0.206",
         window_size=(540, 360),
+        rtsp_url="videos/1028.mp4",
     )
