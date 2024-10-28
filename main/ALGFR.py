@@ -11,6 +11,7 @@ import pymysql
 from datetime import datetime, timedelta
 import threading
 import queue
+import math
 
 
 class CarpalDetector:
@@ -33,10 +34,32 @@ class CarpalDetector:
         self.first_green_time = None
         self.is_counting = False
         self.camera_name = camera_name
-        if rtsp_url is None:
-            self.rtsp_url = f"rtsp://admin:oracle2015@{camera_name}:554/Streaming/Channels/1"
+        self.rtsp_url = rtsp_url
+        self.video_fps = None  # Initialize video FPS
+        self.is_local_file = False  # Flag to indicate if rtsp_url is a local file
+
+        if rtsp_url is not None:
+            self.rtsp_url = rtsp_url  # Keep the provided rtsp_url
+            if os.path.isfile(rtsp_url):
+                # It's a local file
+                self.is_local_file = True
+                cap = cv2.VideoCapture(self.rtsp_url)
+                self.video_fps = cap.get(cv2.CAP_PROP_FPS)
+                if not self.video_fps or math.isnan(self.video_fps):
+                    self.video_fps = 25  # Default FPS if unable to get
+                cap.release()
+                print(f"Local video file detected. FPS: {self.video_fps}")
+            else:
+                # Assume it's an RTSP stream
+                self.is_local_file = False
+                print(f"RTSP stream detected. URL: {self.rtsp_url}")
+                self.video_fps = None
         else:
-            self.rtsp_url = rtsp_url
+            # rtsp_url is None
+            self.rtsp_url = f"rtsp://admin:oracle2015@{camera_name}:554/Streaming/Channels/1"
+            self.video_fps = None
+            self.is_local_file = False
+
         self.borders, self.idx = self.camera_config(camera_name)
         self.show_text = True
         self.frame_queue = queue.Queue(maxsize=10)
@@ -136,7 +159,7 @@ class CarpalDetector:
         }
         camera_names = list(config.keys())
         indices = {name: idx + 1 for idx, name in enumerate(camera_names)}
-        return config[camera_name], indices[camera_name]
+        return config.get(camera_name, []), indices.get(camera_name, 0)
 
     def process_model(self, frame):
         with torch.no_grad():
@@ -175,7 +198,7 @@ class CarpalDetector:
                             if norm != 0:
                                 vx /= norm
                                 vy /= norm
-                                extension_length = 5  # Panjang perpanjangan
+                                extension_length = 20  # Panjang perpanjangan
                                 x_new = int(kp9[0] + vx * extension_length)
                                 y_new = int(kp9[1] + vy * extension_length)
                                 keypoints_list[9] = (x_new, y_new)
@@ -189,7 +212,7 @@ class CarpalDetector:
                             if norm != 0:
                                 vx /= norm
                                 vy /= norm
-                                extension_length = 5  # Panjang perpanjangan
+                                extension_length = 20  # Panjang perpanjangan
                                 x_new = int(kp10[0] + vx * extension_length)
                                 y_new = int(kp10[1] + vy * extension_length)
                                 keypoints_list[10] = (x_new, y_new)
@@ -367,17 +390,17 @@ class CarpalDetector:
 
         # Menggambar keypoints dengan ukuran lingkaran berbeda
         if keypoint_positions:
+            for x, y, color in coords:
+                cv2.line(frame_resized, x, y, color, 2)
             for keypoints_list in keypoint_positions:
                 for idx, point in enumerate(keypoints_list):
                     if point is not None:
                         if idx == 9 or idx == 10:
                             radius = 10  # Radius lebih besar untuk titik 9 dan 10
                         else:
-                            radius = 5  # Radius default
+                            radius = 3  # Radius default
                         cv2.circle(frame_resized, point, radius, (0, 255, 255), -1)
             # Menggambar garis antar keypoints
-            for x, y, color in coords:
-                cv2.line(frame_resized, x, y, color, 2)
 
         overlay = frame_resized.copy()
         alpha = 0.5
@@ -420,7 +443,7 @@ class CarpalDetector:
             timestamp_done_str = timestamp_done.strftime("%Y-%m-%d %H:%M:%S")
             timestamp_start_str = timestamp_start.strftime("%Y-%m-%d %H:%M:%S")
 
-            # **Define the parameter time to compare with (e.g., 09:00:00)**
+            # **Define the parameter time to compare with (e.g., 08:30:00)**
             parameter_time_str = "08:30:00"
             parameter_time = datetime.strptime(parameter_time_str, "%H:%M:%S").time()
 
@@ -487,65 +510,115 @@ class CarpalDetector:
         process_every_n_frames = 2
         frame_count = 0
 
-        self.frame_thread = threading.Thread(target=self.frame_capture)
-        self.frame_thread.daemon = True
-        self.frame_thread.start()
-
         window_name = f"BROOM{self.idx} : {self.camera_name}"
         cv2.namedWindow(window_name, cv2.WINDOW_NORMAL)
         cv2.resizeWindow(window_name, self.window_width, self.window_height)
 
-        while True:
-            if self.stop_event.is_set():
-                break
-            try:
-                frame = self.frame_queue.get(timeout=5)
-            except queue.Empty:
-                continue
+        if self.is_local_file:
+            # Local video file, process frames in the main thread
+            cap = cv2.VideoCapture(self.rtsp_url)
+            frame_delay = int(1000 / self.video_fps)  # Delay in milliseconds
 
-            frame_count += 1
-            if frame_count % process_every_n_frames != 0:
-                continue
+            while cap.isOpened():
+                start_time = time.time()
+                ret, frame = cap.read()
+                if not ret:
+                    print("End of video file or cannot read the frame.")
+                    break
 
-            current_time = time.time()
-            time_diff = current_time - self.prev_frame_time
-            if time_diff > 0:
-                self.fps = 1 / time_diff
-            else:
-                self.fps = 0
-            self.prev_frame_time = current_time
-            total_borders = len(self.borders)
-            green_borders = sum(1 for state in self.border_states.values() if state["is_green"])
-            percentage_green = (green_borders / total_borders) * 100
-            frame_resized = self.process_frame(frame, current_time, percentage_green, pairs_human)
-            if self.show_text:
-                cvzone.putTextRect(
-                    frame_resized,
-                    f"Percentage of Green Border: {percentage_green:.2f}%",
-                    (10, self.new_height - 50),
-                    scale=1,
-                    thickness=2,
-                    offset=5,
-                )
-                cvzone.putTextRect(frame_resized, f"FPS: {int(self.fps)}", (10, self.new_height - 75), scale=1, thickness=2, offset=5)
-            cv2.imshow(window_name, frame_resized)
-            key = cv2.waitKey(1) & 0xFF
-            if key == ord("n"):
-                self.stop_event.set()
-                break
-            elif key == ord("s"):
-                self.show_text = not self.show_text
-        cv2.destroyAllWindows()
-        self.frame_thread.join()
+                frame_count += 1
+                if frame_count % process_every_n_frames != 0:
+                    continue
+
+                current_time = time.time()
+                time_diff = current_time - self.prev_frame_time
+                if time_diff > 0:
+                    self.fps = 1 / time_diff
+                else:
+                    self.fps = 0
+                self.prev_frame_time = current_time
+                total_borders = len(self.borders)
+                green_borders = sum(1 for state in self.border_states.values() if state["is_green"])
+                percentage_green = (green_borders / total_borders) * 100
+                frame_resized = self.process_frame(frame, current_time, percentage_green, pairs_human)
+                if self.show_text:
+                    cvzone.putTextRect(
+                        frame_resized,
+                        f"Percentage of Green Border: {percentage_green:.2f}%",
+                        (10, self.new_height - 50),
+                        scale=1,
+                        thickness=2,
+                        offset=5,
+                    )
+                    cvzone.putTextRect(frame_resized, f"FPS: {int(self.fps)}", (10, self.new_height - 75), scale=1, thickness=2, offset=5)
+                cv2.imshow(window_name, frame_resized)
+                processing_time = (time.time() - start_time) * 1000  # Convert to milliseconds
+                adjusted_delay = max(int(frame_delay - processing_time), 1)
+                key = cv2.waitKey(adjusted_delay) & 0xFF
+                if key == ord("n"):
+                    break
+                elif key == ord("s"):
+                    self.show_text = not self.show_text
+            cap.release()
+            cv2.destroyAllWindows()
+        else:
+            # RTSP stream, use frame capture thread
+            self.frame_thread = threading.Thread(target=self.frame_capture)
+            self.frame_thread.daemon = True
+            self.frame_thread.start()
+
+            while True:
+                if self.stop_event.is_set():
+                    break
+                try:
+                    frame = self.frame_queue.get(timeout=5)
+                except queue.Empty:
+                    continue
+
+                frame_count += 1
+                if frame_count % process_every_n_frames != 0:
+                    continue
+
+                current_time = time.time()
+                time_diff = current_time - self.prev_frame_time
+                if time_diff > 0:
+                    self.fps = 1 / time_diff
+                else:
+                    self.fps = 0
+                self.prev_frame_time = current_time
+                total_borders = len(self.borders)
+                green_borders = sum(1 for state in self.border_states.values() if state["is_green"])
+                percentage_green = (green_borders / total_borders) * 100
+                frame_resized = self.process_frame(frame, current_time, percentage_green, pairs_human)
+                if self.show_text:
+                    cvzone.putTextRect(
+                        frame_resized,
+                        f"Percentage of Green Border: {percentage_green:.2f}%",
+                        (10, self.new_height - 50),
+                        scale=1,
+                        thickness=2,
+                        offset=5,
+                    )
+                    cvzone.putTextRect(frame_resized, f"FPS: {int(self.fps)}", (10, self.new_height - 75), scale=1, thickness=2, offset=5)
+                cv2.imshow(window_name, frame_resized)
+                key = cv2.waitKey(1) & 0xFF
+                if key == ord("n"):
+                    self.stop_event.set()
+                    break
+                elif key == ord("s"):
+                    self.show_text = not self.show_text
+            cv2.destroyAllWindows()
+            self.frame_thread.join()
 
 
-def run_carpal(CARPAL_ABSENCE_THRESHOLD, CARPAL_TOUCH_THRESHOLD, CARPAL_PERCENTAGE_GREEN_THRESHOLD, camera_name, window_size=(540, 360)):
+def run_carpal(CARPAL_ABSENCE_THRESHOLD, CARPAL_TOUCH_THRESHOLD, CARPAL_PERCENTAGE_GREEN_THRESHOLD, camera_name, window_size=(540, 360), rtsp_url=None):
     detector = CarpalDetector(
         CARPAL_ABSENCE_THRESHOLD=CARPAL_ABSENCE_THRESHOLD,
         CARPAL_TOUCH_THRESHOLD=CARPAL_TOUCH_THRESHOLD,
         CARPAL_PERCENTAGE_GREEN_THRESHOLD=CARPAL_PERCENTAGE_GREEN_THRESHOLD,
         camera_name=camera_name,
         window_size=window_size,
+        rtsp_url=rtsp_url,
     )
 
     detector.main()
@@ -556,6 +629,7 @@ if __name__ == "__main__":
         CARPAL_ABSENCE_THRESHOLD=30,
         CARPAL_TOUCH_THRESHOLD=0,
         CARPAL_PERCENTAGE_GREEN_THRESHOLD=50,
-        camera_name="10.5.0.182",
+        camera_name="10.5.0.170",
         window_size=(540, 360),
+        rtsp_url="D:/NWR/videos/UJI/carpal lorong office.mp4",
     )
