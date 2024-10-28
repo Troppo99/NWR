@@ -34,38 +34,34 @@ class MotorDetector:
         self.scale_x = self.new_width / 1280
         self.scale_y = self.new_height / 720
         self.scaled_borders = []
-        self.start_time = None
-        self.end_time = None
-        self.elapsed_time = None
-        self.motor_absence_timer_start = None
         self.prev_frame_time = time.time()
         self.fps = 0
-        self.first_yellow_time = None
-        self.is_counting = False
         self.camera_name = camera_name
         self.rtsp_url = rtsp_url
         self.video_fps = None  # Initialize video FPS
         self.is_local_file = False  # Flag to indicate if rtsp_url is a local file
 
         if rtsp_url is not None:
+            self.rtsp_url = rtsp_url  # Keep the provided rtsp_url
             if os.path.isfile(rtsp_url):
                 # It's a local file
                 self.is_local_file = True
-                cap = cv2.VideoCapture(rtsp_url)
+                cap = cv2.VideoCapture(self.rtsp_url)
                 self.video_fps = cap.get(cv2.CAP_PROP_FPS)
                 if not self.video_fps or math.isnan(self.video_fps):
                     self.video_fps = 25  # Default FPS if unable to get
                 cap.release()
                 print(f"Local video file detected. FPS: {self.video_fps}")
             else:
-                # It's likely an RTSP stream
-                self.rtsp_url = rtsp_url if rtsp_url.startswith("rtsp://") else f"rtsp://admin:oracle2015@{camera_name}:554/Streaming/Channels/1"
+                # Assume it's an RTSP stream
+                self.is_local_file = False
                 print(f"RTSP stream detected. URL: {self.rtsp_url}")
                 self.video_fps = None
         else:
-            # Use camera_name to build RTSP URL
+            # rtsp_url is None
             self.rtsp_url = f"rtsp://admin:oracle2015@{camera_name}:554/Streaming/Channels/1"
             self.video_fps = None
+            self.is_local_file = False
 
         self.borders, self.idx = self.camera_config(camera_name)
         self.show_text = True
@@ -88,6 +84,8 @@ class MotorDetector:
                 "motor_absence_timer_start": None,
                 "first_yellow_time": None,
                 "is_counting": False,
+                "image_start": None,
+                "image_done": None,
             }
             for idx in range(len(self.borders))
         }
@@ -164,7 +162,7 @@ class MotorDetector:
         }
         camera_names = list(config.keys())
         indices = {name: idx + 1 for idx, name in enumerate(camera_names)}
-        return config[camera_name], indices.get(camera_name, 0)
+        return config.get(camera_name, []), indices.get(camera_name, 0)
 
     def frame_capture(self):
         rtsp_url = self.rtsp_url
@@ -189,7 +187,16 @@ class MotorDetector:
                     pass
             cap.release()
 
-    def send_to_server(self, host, elapsed_time, image_path):
+    def send_to_server(
+        self,
+        host,
+        activity,
+        border_id,
+        timestamp_start,
+        timestamp_done,
+        image_start,
+        image_done,
+    ):
         def server_address(host):
             if host == "localhost":
                 user = "root"
@@ -208,49 +215,29 @@ class MotorDetector:
             connection = pymysql.connect(host=host, user=user, password=password, database=database, port=port)
             cursor = connection.cursor()
             table = "empbro"
-            activity = "Motorcycle Detected"
             camera_name = self.camera_name
-            timestamp_done = datetime.now()
-            timestamp_start = timestamp_done - timedelta(seconds=elapsed_time)
 
-            timestamp_done_str = timestamp_done.strftime("%Y-%m-%d %H:%M:%S")
-            timestamp_start_str = timestamp_start.strftime("%Y-%m-%d %H:%M:%S")
-
-            # Define the parameter time to compare with (e.g., 09:00:00)
-            parameter_time_str = "09:00:00"
-            parameter_time = datetime.strptime(parameter_time_str, "%H:%M:%S").time()
-
-            # Extract the time portion of timestamp_done
-            timestamp_done_time = timestamp_done.time()
-
-            # Compare and set isdiscipline
-            if timestamp_done_time > parameter_time:
-                isdiscipline = "Tidak disiplin"
-            else:
-                isdiscipline = "Disiplin"
-
-            with open(image_path, "rb") as file:
-                binary_image = file.read()
-
-            query = f"""
-            INSERT INTO {table} (cam, activity, timestamp_start, timestamp_done, image_done, isdiscipline)
-            VALUES (%s, %s, %s, %s, %s, %s)
-            """
-            cursor.execute(
-                query,
-                (
-                    camera_name,
-                    activity,
-                    timestamp_start_str,
-                    timestamp_done_str,
-                    binary_image,
-                    isdiscipline,
-                ),
+            # Prepare data
+            data = (
+                camera_name,
+                activity,
+                border_id,
+                timestamp_start.strftime("%Y-%m-%d %H:%M:%S") if timestamp_start else None,
+                timestamp_done.strftime("%Y-%m-%d %H:%M:%S") if timestamp_done else None,
+                image_start,
+                image_done,
             )
+
+            # Insert data into the database
+            query = f"""
+            INSERT INTO {table} (cam, activity, border, timestamp_start, timestamp_done, image_start, image_done)
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
+            """
+            cursor.execute(query, data)
             connection.commit()
-            print(f"Motor data successfully sent to server.")
+            print(f"Data successfully sent to server for border {border_id}.")
         except pymysql.MySQLError as e:
-            print(f"Error sending motor data to server: {e}")
+            print(f"Error sending data to server: {e}")
         finally:
             if "cursor" in locals():
                 cursor.close()
@@ -308,14 +295,36 @@ class MotorDetector:
                     state["last_motor_overlap_time"] = current_time
 
                 if state["motor_overlap_time"] >= self.MOTOR_TOUCH_THRESHOLD:
-                    state["is_yellow"] = True
+                    if not state["is_yellow"]:
+                        # Border turns yellow for the first time
+                        state["is_yellow"] = True
+                        state["first_yellow_time"] = current_time
+                        state["is_counting"] = True
+
+                        # Capture image_start
+                        image_start = frame_resized.copy()
+                        overlay = image_start.copy()
+                        alpha = 0.5
+                        cv2.fillPoly(overlay, pts=[border_pt], color=(0, 255, 255))
+                        cv2.addWeighted(overlay, alpha, image_start, 1 - alpha, 0, image_start)
+                        image_start_path = f"main/images/border_{border_id}_start.jpg"
+                        cv2.imwrite(image_start_path, image_start)
+                        with open(image_start_path, "rb") as file:
+                            binary_image_start = file.read()
+
+                        # Send data to server with image_start
+                        self.send_to_server(
+                            host="10.5.0.2",
+                            activity="Motorcycle Detected",
+                            border_id=border_id,
+                            timestamp_start=datetime.now(),
+                            timestamp_done=None,
+                            image_start=binary_image_start,
+                            image_done=None,
+                        )
 
                 # Reset absence timer
                 state["motor_absence_timer_start"] = None
-
-                if not state["is_counting"] and state["is_yellow"]:
-                    state["first_yellow_time"] = current_time
-                    state["is_counting"] = True
 
             else:
                 if state["last_motor_overlap_time"] is not None:
@@ -331,49 +340,37 @@ class MotorDetector:
                             state["motor_overlap_time"] = 0.0
                             state["motor_absence_timer_start"] = None
                         else:
-                            # Reset the border
+                            # Violation ends, reset the border
                             state["is_yellow"] = False
                             state["motor_overlap_time"] = 0.0
                             state["last_motor_overlap_time"] = None
                             state["motor_absence_timer_start"] = None
 
-                            # Compute elapsed time
-                            if state["first_yellow_time"] is not None:
-                                elapsed_time = current_time - state["first_yellow_time"]
-                                state["first_yellow_time"] = None
-                                state["is_counting"] = False
+                            # Capture image_done
+                            image_done = frame_resized.copy()
+                            overlay = image_done.copy()
+                            alpha = 0.5
+                            cv2.fillPoly(overlay, pts=[border_pt], color=(0, 255, 0))
+                            cv2.addWeighted(overlay, alpha, image_done, 1 - alpha, 0, image_done)
+                            image_done_path = f"main/images/border_{border_id}_done.jpg"
+                            cv2.imwrite(image_done_path, image_done)
+                            with open(image_done_path, "rb") as file:
+                                binary_image_done = file.read()
 
-                                # Send data for this border
-                                print(f"Border {border_id} reset after being yellow for {elapsed_time:.2f} seconds.")
-                                overlay = frame_resized.copy()
-                                alpha = 0.5
-                                # Fill only the current border
-                                cv2.fillPoly(overlay, pts=[border_pt], color=(0, 255, 255))
-                                cv2.addWeighted(overlay, alpha, frame_resized, 1 - alpha, 0, frame_resized)
+                            # Send data to server with image_done
+                            self.send_to_server(
+                                host="10.5.0.2",
+                                activity="Motorcycle Detected",
+                                border_id=border_id,
+                                timestamp_start=None,  # We can leave it None if not needed
+                                timestamp_done=datetime.now(),
+                                image_start=None,  # Since we already sent image_start before
+                                image_done=binary_image_done,
+                            )
 
-                                if self.show_text:
-                                    minutes, seconds = divmod(int(elapsed_time), 60)
-                                    time_str = f"Elapsed Time Border {border_id}: {minutes:02d}:{seconds:02d}"
-                                    cvzone.putTextRect(
-                                        frame_resized,
-                                        time_str,
-                                        (10, self.new_height - 100 - 25 * border_id),
-                                        scale=1,
-                                        thickness=2,
-                                        offset=5,
-                                    )
-                                    cvzone.putTextRect(
-                                        frame_resized,
-                                        f"FPS: {int(self.fps)}",
-                                        (10, self.new_height - 75),
-                                        scale=1,
-                                        thickness=2,
-                                        offset=5,
-                                    )
-                                image_path = f"main/images/border_{border_id}_reset.jpg"
-                                cv2.imwrite(image_path, frame_resized)
-                                # Adjust the send_to_server call to match your needs
-                                # self.send_to_server("10.5.0.2", elapsed_time, image_path)
+                            # Reset counting variables
+                            state["first_yellow_time"] = None
+                            state["is_counting"] = False
 
             # Update border_colors
             if state["is_yellow"]:
@@ -384,8 +381,15 @@ class MotorDetector:
         # Drawing boxes and overlays
         if boxes_info:
             for x1, y1, x2, y2, conf, class_id in boxes_info:
-                # cvzone.putTextRect(frame_resized, f"{class_id} {conf:.2f}", (x1, y1), scale=1, thickness=2, offset=5, colorR=(0, 255, 255), colorT=(70, 10, 30))
-                cvzone.cornerRect(frame_resized, (x1, y1, x2 - x1, y2 - y1), l=10, t=2, colorR=(0, 255, 255), colorC=(255, 255, 255))
+                # Draw bounding boxes
+                cvzone.cornerRect(
+                    frame_resized,
+                    (x1, y1, x2 - x1, y2 - y1),
+                    l=10,
+                    t=2,
+                    colorR=(0, 255, 255),
+                    colorC=(255, 255, 255),
+                )
 
         overlay = frame_resized.copy()
         alpha = 0.5
@@ -408,7 +412,14 @@ class MotorDetector:
                         thickness=2,
                         offset=5,
                     )
-            cvzone.putTextRect(frame_resized, f"FPS: {int(self.fps)}", (10, self.new_height - 75), scale=1, thickness=2, offset=5)
+            cvzone.putTextRect(
+                frame_resized,
+                f"FPS: {int(self.fps)}",
+                (10, self.new_height - 75),
+                scale=1,
+                thickness=2,
+                offset=5,
+            )
 
         return frame_resized
 
@@ -444,7 +455,14 @@ class MotorDetector:
                 self.prev_frame_time = current_time
                 frame_resized = self.process_frame(frame, current_time)
                 if self.show_text:
-                    cvzone.putTextRect(frame_resized, f"FPS: {int(self.fps)}", (10, self.new_height - 75), scale=1, thickness=2, offset=5)
+                    cvzone.putTextRect(
+                        frame_resized,
+                        f"FPS: {int(self.fps)}",
+                        (10, self.new_height - 75),
+                        scale=1,
+                        thickness=2,
+                        offset=5,
+                    )
                 cv2.imshow(window_name, frame_resized)
                 processing_time = (time.time() - start_time) * 1000  # Convert to milliseconds
                 adjusted_delay = max(int(frame_delay - processing_time), 1)
@@ -482,7 +500,14 @@ class MotorDetector:
                 self.prev_frame_time = current_time
                 frame_resized = self.process_frame(frame, current_time)
                 if self.show_text:
-                    cvzone.putTextRect(frame_resized, f"FPS: {int(self.fps)}", (10, self.new_height - 75), scale=1, thickness=2, offset=5)
+                    cvzone.putTextRect(
+                        frame_resized,
+                        f"FPS: {int(self.fps)}",
+                        (10, self.new_height - 75),
+                        scale=1,
+                        thickness=2,
+                        offset=5,
+                    )
                 cv2.imshow(window_name, frame_resized)
                 key = cv2.waitKey(1) & 0xFF
                 if key == ord("n"):
@@ -521,5 +546,5 @@ if __name__ == "__main__":
         MOTOR_CONFIDENCE_THRESHOLD=0,
         camera_name="10.5.0.206",
         window_size=(540, 360),
-        # rtsp_url="videos/1028.mp4",
+        rtsp_url="videos/1028.mp4",
     )
