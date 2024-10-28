@@ -86,6 +86,7 @@ class MotorDetector:
                 "is_counting": False,
                 "image_start": None,
                 "image_done": None,
+                "db_id": None,  # Add this line
             }
             for idx in range(len(self.borders))
         }
@@ -196,6 +197,7 @@ class MotorDetector:
         timestamp_done,
         image_start,
         image_done,
+        db_id=None,
     ):
         def server_address(host):
             if host == "localhost":
@@ -217,25 +219,40 @@ class MotorDetector:
             table = "empbro"
             camera_name = self.camera_name
 
-            # Prepare data
-            data = (
-                camera_name,
-                activity,
-                border_id,
-                timestamp_start.strftime("%Y-%m-%d %H:%M:%S") if timestamp_start else None,
-                timestamp_done.strftime("%Y-%m-%d %H:%M:%S") if timestamp_done else None,
-                image_start,
-                image_done,
-            )
-
-            # Insert data into the database
-            query = f"""
-            INSERT INTO {table} (cam, activity, border, timestamp_start, timestamp_done, image_start, image_done)
-            VALUES (%s, %s, %s, %s, %s, %s, %s)
-            """
-            cursor.execute(query, data)
-            connection.commit()
-            print(f"Data successfully sent to server for border {border_id}.")
+            if db_id is None:
+                # Insert new record
+                query = f"""
+                INSERT INTO {table} (cam, activity, border, timestamp_start, image_start)
+                VALUES (%s, %s, %s, %s, %s)
+                """
+                data = (
+                    camera_name,
+                    activity,
+                    border_id,
+                    timestamp_start.strftime("%Y-%m-%d %H:%M:%S") if timestamp_start else None,
+                    image_start,
+                )
+                cursor.execute(query, data)
+                connection.commit()
+                db_id = cursor.lastrowid  # Get the auto-incremented ID
+                print(f"Data successfully inserted to server for border {border_id} with ID {db_id}.")
+                return db_id  # Return the db_id
+            else:
+                # Update existing record
+                query = f"""
+                UPDATE {table}
+                SET timestamp_done=%s, image_done=%s
+                WHERE id=%s
+                """
+                data = (
+                    timestamp_done.strftime("%Y-%m-%d %H:%M:%S") if timestamp_done else None,
+                    image_done,
+                    db_id,
+                )
+                cursor.execute(query, data)
+                connection.commit()
+                print(f"Data successfully updated to server for border {border_id} with ID {db_id}.")
+                return db_id
         except pymysql.MySQLError as e:
             print(f"Error sending data to server: {e}")
         finally:
@@ -312,8 +329,8 @@ class MotorDetector:
                         with open(image_start_path, "rb") as file:
                             binary_image_start = file.read()
 
-                        # Send data to server with image_start
-                        self.send_to_server(
+                        # Send data to server with image_start and get db_id
+                        db_id = self.send_to_server(
                             host="10.5.0.2",
                             activity="Motorcycle Detected",
                             border_id=border_id,
@@ -321,7 +338,10 @@ class MotorDetector:
                             timestamp_done=None,
                             image_start=binary_image_start,
                             image_done=None,
+                            db_id=None,
                         )
+                        # Store db_id in state
+                        state["db_id"] = db_id
 
                 # Reset absence timer
                 state["motor_absence_timer_start"] = None
@@ -358,15 +378,21 @@ class MotorDetector:
                                 binary_image_done = file.read()
 
                             # Send data to server with image_done
-                            self.send_to_server(
-                                host="10.5.0.2",
-                                activity="Motorcycle Detected",
-                                border_id=border_id,
-                                timestamp_start=None,  # We can leave it None if not needed
-                                timestamp_done=datetime.now(),
-                                image_start=None,  # Since we already sent image_start before
-                                image_done=binary_image_done,
-                            )
+                            if state["db_id"] is not None:
+                                self.send_to_server(
+                                    host="10.5.0.2",
+                                    activity="Motorcycle Detected",
+                                    border_id=border_id,
+                                    timestamp_start=None,
+                                    timestamp_done=datetime.now(),
+                                    image_start=None,
+                                    image_done=binary_image_done,
+                                    db_id=state["db_id"],  # Use the db_id to update the record
+                                )
+                                # Clear db_id after updating
+                                state["db_id"] = None
+                            else:
+                                print(f"No db_id found for border {border_id} when ending violation.")
 
                             # Reset counting variables
                             state["first_yellow_time"] = None
@@ -542,7 +568,7 @@ def run_motor(
 if __name__ == "__main__":
     run_motor(
         MOTOR_ABSENCE_THRESHOLD=3,
-        MOTOR_TOUCH_THRESHOLD=5,
+        MOTOR_TOUCH_THRESHOLD=3,
         MOTOR_CONFIDENCE_THRESHOLD=0,
         camera_name="10.5.0.206",
         window_size=(540, 360),
