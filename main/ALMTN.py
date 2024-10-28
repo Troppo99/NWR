@@ -18,7 +18,7 @@ class MotorDetector:
     def __init__(
         self,
         MOTOR_ABSENCE_THRESHOLD=10,
-        MOTOR_TOUCH_THRESHOLD=0,
+        MOTOR_TOUCH_THRESHOLD=3,
         MOTOR_CONFIDENCE_THRESHOLD=0.5,
         motor_model="yolo11l.pt",
         camera_name=None,
@@ -108,7 +108,7 @@ class MotorDetector:
             while not self.stop_event.is_set():
                 ret, frame = cap.read()
                 if not ret:
-                    print("Stream gagal dibaca. Pastikan URL stream benar.")
+                    print("Failed to read stream. Retrying...")
                     cap.release()
                     time.sleep(5)
                     break
@@ -137,7 +137,7 @@ class MotorDetector:
             connection = pymysql.connect(host=host, user=user, password=password, database=database, port=port)
             cursor = connection.cursor()
             table = "empbro"
-            activity = "Mengelap Kaca"
+            activity = "Motorcycle Detected"
             camera_name = self.camera_name
             timestamp_done = datetime.now()
             timestamp_start = timestamp_done - timedelta(seconds=elapsed_time)
@@ -145,14 +145,14 @@ class MotorDetector:
             timestamp_done_str = timestamp_done.strftime("%Y-%m-%d %H:%M:%S")
             timestamp_start_str = timestamp_start.strftime("%Y-%m-%d %H:%M:%S")
 
-            # **Define the parameter time to compare with (e.g., 09:00:00)**
+            # Define the parameter time to compare with (e.g., 09:00:00)
             parameter_time_str = "09:00:00"
             parameter_time = datetime.strptime(parameter_time_str, "%H:%M:%S").time()
 
-            # **Extract the time portion of timestamp_done**
+            # Extract the time portion of timestamp_done
             timestamp_done_time = timestamp_done.time()
 
-            # **Compare and set isdiscipline**
+            # Compare and set isdiscipline
             if timestamp_done_time > parameter_time:
                 isdiscipline = "Tidak disiplin"
             else:
@@ -202,7 +202,6 @@ class MotorDetector:
                     boxes_info.append((x1, y1, x2, y2, conf, class_id))
         return boxes_info
 
-
     def process_frame(self, frame, current_time):
         frame_resized = cv2.resize(frame, (self.new_width, self.new_height))
         results = self.process_model(frame_resized)
@@ -243,61 +242,67 @@ class MotorDetector:
                 # Reset absence timer
                 state["motor_absence_timer_start"] = None
 
-                if not state["is_counting"]:
+                if not state["is_counting"] and state["is_yellow"]:
                     state["first_yellow_time"] = current_time
                     state["is_counting"] = True
 
             else:
-                state["last_motor_overlap_time"] = None
-
-                if state["motor_absence_timer_start"] is None:
+                if state["last_motor_overlap_time"] is not None:
+                    state["last_motor_overlap_time"] = None
+                    # Start absence timer
                     state["motor_absence_timer_start"] = current_time
-                else:
+
+                elif state["motor_absence_timer_start"] is not None:
                     absence_time = current_time - state["motor_absence_timer_start"]
-                    if absence_time >= self.MOTOR_ABSENCE_THRESHOLD and state["is_yellow"]:
-                        # Reset the border
-                        state["is_yellow"] = False
-                        state["motor_overlap_time"] = 0.0
-                        state["last_motor_overlap_time"] = None
-                        state["motor_absence_timer_start"] = None
+                    if absence_time >= self.MOTOR_ABSENCE_THRESHOLD:
+                        if not state["is_yellow"]:
+                            # Reset accumulated overlap time
+                            state["motor_overlap_time"] = 0.0
+                            state["motor_absence_timer_start"] = None
+                        else:
+                            # Reset the border
+                            state["is_yellow"] = False
+                            state["motor_overlap_time"] = 0.0
+                            state["last_motor_overlap_time"] = None
+                            state["motor_absence_timer_start"] = None
 
-                        # Compute elapsed time
-                        if state["first_yellow_time"] is not None:
-                            elapsed_time = current_time - state["first_yellow_time"]
-                            state["first_yellow_time"] = None
-                            state["is_counting"] = False
+                            # Compute elapsed time
+                            if state["first_yellow_time"] is not None:
+                                elapsed_time = current_time - state["first_yellow_time"]
+                                state["first_yellow_time"] = None
+                                state["is_counting"] = False
 
-                            # Send data for this border
-                            print(f"Border {border_id} reset after being yellow for {elapsed_time:.2f} seconds.")
-                            overlay = frame_resized.copy()
-                            alpha = 0.5
-                            # Fill only the current border
-                            cv2.fillPoly(overlay, pts=[border_pt], color=(0, 255, 255))
-                            cv2.addWeighted(overlay, alpha, frame_resized, 1 - alpha, 0, frame_resized)
+                                # Send data for this border
+                                print(f"Border {border_id} reset after being yellow for {elapsed_time:.2f} seconds.")
+                                overlay = frame_resized.copy()
+                                alpha = 0.5
+                                # Fill only the current border
+                                cv2.fillPoly(overlay, pts=[border_pt], color=(0, 255, 255))
+                                cv2.addWeighted(overlay, alpha, frame_resized, 1 - alpha, 0, frame_resized)
 
-                            if self.show_text:
-                                minutes, seconds = divmod(int(elapsed_time), 60)
-                                time_str = f"Elapsed Time Border {border_id}: {minutes:02d}:{seconds:02d}"
-                                cvzone.putTextRect(
-                                    frame_resized,
-                                    time_str,
-                                    (10, self.new_height - 100 - 25 * border_id),
-                                    scale=1,
-                                    thickness=2,
-                                    offset=5,
-                                )
-                                cvzone.putTextRect(
-                                    frame_resized,
-                                    f"FPS: {int(self.fps)}",
-                                    (10, self.new_height - 75),
-                                    scale=1,
-                                    thickness=2,
-                                    offset=5,
-                                )
-                            image_path = f"main/images/border_{border_id}_reset.jpg"
-                            cv2.imwrite(image_path, frame_resized)
-                            # Adjust the send_to_server call to match your needs
-                            # self.send_to_server("10.5.0.2", elapsed_time, image_path)
+                                if self.show_text:
+                                    minutes, seconds = divmod(int(elapsed_time), 60)
+                                    time_str = f"Elapsed Time Border {border_id}: {minutes:02d}:{seconds:02d}"
+                                    cvzone.putTextRect(
+                                        frame_resized,
+                                        time_str,
+                                        (10, self.new_height - 100 - 25 * border_id),
+                                        scale=1,
+                                        thickness=2,
+                                        offset=5,
+                                    )
+                                    cvzone.putTextRect(
+                                        frame_resized,
+                                        f"FPS: {int(self.fps)}",
+                                        (10, self.new_height - 75),
+                                        scale=1,
+                                        thickness=2,
+                                        offset=5,
+                                    )
+                                image_path = f"main/images/border_{border_id}_reset.jpg"
+                                cv2.imwrite(image_path, frame_resized)
+                                # Adjust the send_to_server call to match your needs
+                                # self.send_to_server("10.5.0.2", elapsed_time, image_path)
 
             # Update border_colors
             if state["is_yellow"]:
