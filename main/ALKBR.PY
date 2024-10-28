@@ -14,18 +14,7 @@ import queue
 
 
 class BroomDetector:
-    def __init__(
-        self,
-        BROOM_ABSENCE_THRESHOLD=10,
-        BROOM_TOUCH_THRESHOLD=0,
-        BROOM_PERCENTAGE_GREEN_THRESHOLD=50,
-        BROOM_CONFIDENCE_THRESHOLD=0.9,
-        broom_model="broom5l_11.pt",
-        camera_name=None,
-        new_size=(960, 540),
-        rtsp_url=None,
-        window_size=(540, 360)
-    ):
+    def __init__(self, BROOM_ABSENCE_THRESHOLD=10, BROOM_TOUCH_THRESHOLD=0, BROOM_PERCENTAGE_GREEN_THRESHOLD=50, BROOM_CONFIDENCE_THRESHOLD=0.9, broom_model="broom5l_11.pt", camera_name=None, new_size=(960, 540), rtsp_url=None, window_size=(540, 360)):
         self.BROOM_CONFIDENCE_THRESHOLD = BROOM_CONFIDENCE_THRESHOLD
         self.BROOM_ABSENCE_THRESHOLD = BROOM_ABSENCE_THRESHOLD
         self.BROOM_TOUCH_THRESHOLD = BROOM_TOUCH_THRESHOLD
@@ -601,7 +590,7 @@ class BroomDetector:
             timestamp_start_str = timestamp_start.strftime("%Y-%m-%d %H:%M:%S")
 
             # **Define the parameter time to compare with (e.g., 09:00:00)**
-            parameter_time_str = "09:00:00"
+            parameter_time_str = "08:30:00"
             parameter_time = datetime.strptime(parameter_time_str, "%H:%M:%S").time()
 
             # **Extract the time portion of timestamp_done**
@@ -713,7 +702,7 @@ def run_broom(BROOM_ABSENCE_THRESHOLD, BROOM_TOUCH_THRESHOLD, BROOM_PERCENTAGE_G
 
 if __name__ == "__main__":
     run_broom(
-        BROOM_ABSENCE_THRESHOLD=10,
+        BROOM_ABSENCE_THRESHOLD=30,
         BROOM_TOUCH_THRESHOLD=0,
         BROOM_PERCENTAGE_GREEN_THRESHOLD=50,
         camera_name="10.5.0.182",

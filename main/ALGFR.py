@@ -409,9 +409,7 @@ class CarpalDetector:
 
         try:
             user, password, database, port = server_address(host)
-            connection = pymysql.connect(
-                host=host, user=user, password=password, database=database, port=port
-            )
+            connection = pymysql.connect(host=host, user=user, password=password, database=database, port=port)
             cursor = connection.cursor()
             table = "empbro"
             activity = "Mengelap Kaca"
@@ -423,7 +421,7 @@ class CarpalDetector:
             timestamp_start_str = timestamp_start.strftime("%Y-%m-%d %H:%M:%S")
 
             # **Define the parameter time to compare with (e.g., 09:00:00)**
-            parameter_time_str = "09:00:00"
+            parameter_time_str = "08:30:00"
             parameter_time = datetime.strptime(parameter_time_str, "%H:%M:%S").time()
 
             # **Extract the time portion of timestamp_done**
@@ -524,14 +522,12 @@ class CarpalDetector:
                 cvzone.putTextRect(
                     frame_resized,
                     f"Percentage of Green Border: {percentage_green:.2f}%",
-                    (10, self.new_height-50),
+                    (10, self.new_height - 50),
                     scale=1,
                     thickness=2,
                     offset=5,
                 )
-                cvzone.putTextRect(
-                    frame_resized, f"FPS: {int(self.fps)}", (10, self.new_height-75), scale=1, thickness=2, offset=5
-                )
+                cvzone.putTextRect(frame_resized, f"FPS: {int(self.fps)}", (10, self.new_height - 75), scale=1, thickness=2, offset=5)
             cv2.imshow(window_name, frame_resized)
             key = cv2.waitKey(1) & 0xFF
             if key == ord("n"):
@@ -541,6 +537,7 @@ class CarpalDetector:
                 self.show_text = not self.show_text
         cv2.destroyAllWindows()
         self.frame_thread.join()
+
 
 def run_carpal(CARPAL_ABSENCE_THRESHOLD, CARPAL_TOUCH_THRESHOLD, CARPAL_PERCENTAGE_GREEN_THRESHOLD, camera_name, window_size=(540, 360)):
     detector = CarpalDetector(
@@ -556,7 +553,7 @@ def run_carpal(CARPAL_ABSENCE_THRESHOLD, CARPAL_TOUCH_THRESHOLD, CARPAL_PERCENTA
 
 if __name__ == "__main__":
     run_carpal(
-        CARPAL_ABSENCE_THRESHOLD=10,
+        CARPAL_ABSENCE_THRESHOLD=30,
         CARPAL_TOUCH_THRESHOLD=0,
         CARPAL_PERCENTAGE_GREEN_THRESHOLD=50,
         camera_name="10.5.0.182",
