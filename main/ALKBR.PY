@@ -14,7 +14,18 @@ import queue
 
 
 class BroomDetector:
-    def __init__(self, BROOM_ABSENCE_THRESHOLD=10, BROOM_TOUCH_THRESHOLD=0, BROOM_PERCENTAGE_GREEN_THRESHOLD=50, BROOM_CONFIDENCE_THRESHOLD=0.9, broom_model="broom5l_11.pt", camera_name=None, new_size=(960, 540), rtsp_url=None, window_size=(540, 360)):
+    def __init__(
+        self,
+        BROOM_ABSENCE_THRESHOLD=10,
+        BROOM_TOUCH_THRESHOLD=0,
+        BROOM_PERCENTAGE_GREEN_THRESHOLD=50,
+        BROOM_CONFIDENCE_THRESHOLD=0.9,
+        broom_model="broom5l_11.pt",
+        camera_name=None,
+        new_size=(960, 540),
+        rtsp_url=None,
+        window_size=(540, 360),
+    ):
         self.BROOM_CONFIDENCE_THRESHOLD = BROOM_CONFIDENCE_THRESHOLD
         self.BROOM_ABSENCE_THRESHOLD = BROOM_ABSENCE_THRESHOLD
         self.BROOM_TOUCH_THRESHOLD = BROOM_TOUCH_THRESHOLD
@@ -317,7 +328,7 @@ class BroomDetector:
                 ],
                 "ip": "10.5.0.170",
             },
-            "name14": {
+            "OFFICE2": {
                 "borders": [
                     [(29, 493), (107, 444), (168, 543), (81, 598)],
                     [(168, 543), (182, 533), (194, 550), (297, 487), (245, 429), (138, 491)],
@@ -830,13 +841,14 @@ class BroomDetector:
         self.frame_thread.join()
 
 
-def run_broom(BROOM_ABSENCE_THRESHOLD, BROOM_TOUCH_THRESHOLD, BROOM_PERCENTAGE_GREEN_THRESHOLD, camera_name, window_size=(540, 360)):
+def run_broom(BROOM_ABSENCE_THRESHOLD, BROOM_TOUCH_THRESHOLD, BROOM_PERCENTAGE_GREEN_THRESHOLD, camera_name, window_size=(540, 360), rtsp_url=None):
     detector = BroomDetector(
         BROOM_ABSENCE_THRESHOLD=BROOM_ABSENCE_THRESHOLD,
         BROOM_TOUCH_THRESHOLD=BROOM_TOUCH_THRESHOLD,
         BROOM_PERCENTAGE_GREEN_THRESHOLD=BROOM_PERCENTAGE_GREEN_THRESHOLD,
         camera_name=camera_name,
         window_size=window_size,
+        rtsp_url=rtsp_url,
     )
 
     detector.main()
@@ -847,6 +859,7 @@ if __name__ == "__main__":
         BROOM_ABSENCE_THRESHOLD=30,
         BROOM_TOUCH_THRESHOLD=0,
         BROOM_PERCENTAGE_GREEN_THRESHOLD=50,
-        camera_name="name13",
+        camera_name="OFFICE2",
         window_size=(540, 360),
+        # rtsp_url="videos/test2.mp4",
     )
