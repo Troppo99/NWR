@@ -218,6 +218,16 @@ class MotorDetector:
             cursor = connection.cursor()
             table = "empbro"
             camera_name = self.camera_name
+            if camera_name == "10.5.0.206":
+                camera_name = "EXPEDISI2"
+            elif camera_name == "10.5.0.239":
+                camera_name = "KANTIN2"
+            elif camera_name == "10.5.0.228":
+                camera_name = "KANTIN1"
+            elif camera_name == "10.5.0.236":
+                camera_name = "HALAMAN1"
+            elif camera_name == "10.5.0.245":
+                camera_name = "GERBANG1"
 
             if db_id is None:
                 # Insert new record
