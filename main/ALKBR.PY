@@ -14,7 +14,7 @@ import queue
 
 
 class BroomDetector:
-    def __init__(self, BROOM_ABSENCE_THRESHOLD=10, BROOM_TOUCH_THRESHOLD=0, BROOM_PERCENTAGE_GREEN_THRESHOLD=50, BROOM_CONFIDENCE_THRESHOLD=0.9, broom_model="broom5l_11.pt", ip_camera=None, new_size=(960, 540), rtsp_url=None, window_size=(540, 360)):
+    def __init__(self, BROOM_ABSENCE_THRESHOLD=10, BROOM_TOUCH_THRESHOLD=0, BROOM_PERCENTAGE_GREEN_THRESHOLD=50, BROOM_CONFIDENCE_THRESHOLD=0.9, broom_model="broom5l_11.pt", camera_name=None, new_size=(960, 540), rtsp_url=None, window_size=(540, 360)):
         self.BROOM_CONFIDENCE_THRESHOLD = BROOM_CONFIDENCE_THRESHOLD
         self.BROOM_ABSENCE_THRESHOLD = BROOM_ABSENCE_THRESHOLD
         self.BROOM_TOUCH_THRESHOLD = BROOM_TOUCH_THRESHOLD
@@ -32,12 +32,12 @@ class BroomDetector:
         self.fps = 0
         self.first_green_time = None
         self.is_counting = False
-        self.ip_camera = ip_camera
+        self.camera_name = camera_name
+        self.borders, self.ip_camera, self.idx = self.camera_config()
         if rtsp_url is None:
-            self.rtsp_url = f"rtsp://admin:oracle2015@{ip_camera}:554/Streaming/Channels/1"
+            self.rtsp_url = f"rtsp://admin:oracle2015@{self.ip_camera}:554/Streaming/Channels/1"
         else:
             self.rtsp_url = rtsp_url
-        self.borders, self.idx, self.camera_name = self.camera_config(ip_camera)
         self.show_text = True
         self.frame_queue = queue.Queue(maxsize=10)
         self.stop_event = threading.Event()
@@ -65,10 +65,10 @@ class BroomDetector:
         self.broom_model.overrides["verbose"] = False
         print(f"Model Broom device: {next(self.broom_model.model.parameters()).device}")
 
-    def camera_config(self, ip_camera):
+    def camera_config(self):
         config = {
-            # Line
-            "10.5.0.159": {
+            # Line Cameras
+            "name1": {
                 "borders": [
                     [(626, 234), (702, 234), (714, 304), (616, 304)],
                     [(616, 304), (714, 304), (725, 361), (610, 360)],
@@ -79,9 +79,9 @@ class BroomDetector:
                     [(760, 570), (844, 568), (866, 718), (747, 717), (741, 574), (760, 570)],
                     [(621, 571), (741, 574), (747, 717), (611, 716)],
                 ],
-                "name": "nama1",
+                "ip": "10.5.0.159",
             },
-            "10.5.0.146": {
+            "name2": {
                 "borders": [
                     [(589, 9), (629, 10), (630, 43), (582, 44)],
                     [(669, 8), (629, 10), (630, 43), (677, 44)],
@@ -110,9 +110,9 @@ class BroomDetector:
                     [(481, 630), (618, 624), (617, 713), (474, 713)],
                     [(769, 625), (618, 624), (617, 713), (774, 713)],
                 ],
-                "name": "nama2",
+                "ip": "10.5.0.146",
             },
-            "10.5.0.183": {
+            "name3": {
                 "borders": [
                     [(728, 237), (767, 236), (776, 269), (727, 269)],
                     [(798, 238), (767, 236), (776, 269), (815, 272)],
@@ -140,9 +140,9 @@ class BroomDetector:
                     [(273, 567), (194, 667), (131, 645), (217, 549)],
                     [(217, 549), (131, 645), (89, 630), (172, 539)],
                 ],
-                "name": "nama3",
+                "ip": "10.5.0.183",
             },
-            "10.5.0.195": {
+            "name4": {
                 "borders": [
                     [(675, 206), (732, 206), (733, 241), (670, 241)],
                     [(794, 205), (732, 206), (733, 241), (805, 243)],
@@ -163,9 +163,9 @@ class BroomDetector:
                     [(565, 628), (737, 629), (737, 711), (538, 711)],
                     [(925, 619), (737, 629), (737, 711), (949, 708)],
                 ],
-                "name": "nama4",
+                "ip": "10.5.0.195",
             },
-            "10.5.0.201": {
+            "name5": {
                 "borders": [
                     [(608, 12), (665, 12), (662, 46), (592, 47)],
                     [(665, 12), (726, 13), (731, 48), (662, 46)],
@@ -198,9 +198,9 @@ class BroomDetector:
                     [(603, 710), (614, 583), (766, 583), (767, 708)],
                     [(767, 708), (766, 583), (966, 575), (989, 706)],
                 ],
-                "name": "nama5",
+                "ip": "10.5.0.201",
             },
-            "10.5.0.202": {
+            "name6": {
                 "borders": [
                     [(631, 149), (723, 149), (734, 193), (623, 193)],
                     [(623, 193), (734, 193), (747, 242), (612, 242)],
@@ -210,9 +210,9 @@ class BroomDetector:
                     [(565, 464), (802, 464), (821, 571), (549, 575)],
                     [(549, 575), (821, 571), (848, 714), (529, 715)],
                 ],
-                "name": "nama6",
+                "ip": "10.5.0.202",
             },
-            "10.5.0.205": {
+            "name7": {
                 "borders": [
                     [(560, 250), (623, 250), (628, 279), (555, 281)],
                     [(555, 281), (628, 279), (667, 282), (672, 306), (631, 306), (593, 305), (593, 280), (628, 279)],
@@ -224,9 +224,9 @@ class BroomDetector:
                     [(521, 532), (670, 532), (680, 605), (511, 606)],
                     [(511, 606), (680, 605), (699, 717), (507, 717)],
                 ],
-                "name": "nama7",
+                "ip": "10.5.0.205",
             },
-            "10.5.0.207": {
+            "name8": {
                 "borders": [
                     [(190, 551), (172, 439), (65, 565), (164, 586)],
                     [(65, 565), (65, 590), (34, 638), (60, 675), (32, 718), (87, 719), (101, 691)],
@@ -237,9 +237,9 @@ class BroomDetector:
                     [(613, 718), (617, 631), (712, 631), (713, 717)],
                     [(712, 631), (816, 625), (832, 690), (826, 720)],
                 ],
-                "name": "nama8",
+                "ip": "10.5.0.207",
             },
-            "10.5.0.214": {
+            "name9": {
                 "borders": [
                     [(565, 58), (651, 58), (653, 113), (551, 113)],
                     [(551, 113), (653, 113), (655, 181), (531, 179)],
@@ -250,9 +250,9 @@ class BroomDetector:
                     [(570, 468), (747, 481), (745, 583), (561, 578)],
                     [(450, 569), (433, 714), (683, 714), (681, 581), (561, 578)],
                 ],
-                "name": "nama9",
+                "ip": "10.5.0.214",
             },
-            "10.5.0.219": {
+            "name10": {
                 "borders": [
                     [(630, 199), (699, 196), (709, 239), (627, 241)],
                     [(627, 241), (709, 239), (721, 284), (620, 293)],
@@ -262,9 +262,9 @@ class BroomDetector:
                     [(611, 470), (759, 460), (776, 548), (603, 553)],
                     [(603, 553), (594, 714), (812, 716), (776, 548)],
                 ],
-                "name": "nama10",
+                "ip": "10.5.0.219",
             },
-            "10.5.0.217": {
+            "name11": {
                 "borders": [
                     [(619, 95), (706, 96), (717, 150), (614, 155)],
                     [(614, 155), (717, 150), (730, 211), (607, 215)],
@@ -277,9 +277,9 @@ class BroomDetector:
                     [(689, 506), (784, 503), (850, 498), (866, 593), (692, 610)],
                     [(576, 612), (571, 718), (820, 717), (802, 596), (692, 610)],
                 ],
-                "name": "nama11",
+                "ip": "10.5.0.217",
             },
-            "10.5.0.252": {
+            "name12": {
                 "borders": [
                     [(623, 159), (705, 155), (716, 208), (619, 211)],
                     [(619, 211), (716, 208), (728, 270), (611, 276)],
@@ -290,10 +290,10 @@ class BroomDetector:
                     [(757, 445), (876, 438), (900, 536), (860, 573), (860, 592), (781, 607)],
                     [(584, 617), (781, 607), (795, 715), (581, 718)],
                 ],
-                "name": "nama12",
+                "ip": "10.5.0.252",
             },
-            # Office
-            "10.5.0.170": {
+            # Office Cameras
+            "name13": {
                 "borders": [
                     [(688, 98), (737, 100), (739, 137), (684, 136)],
                     [(790, 103), (737, 100), (739, 137), (803, 140)],
@@ -315,9 +315,9 @@ class BroomDetector:
                     [(904, 529), (760, 526), (762, 644), (923, 644)],
                     [(606, 639), (762, 644), (923, 644), (932, 710), (596, 710)],
                 ],
-                "name": "nama13",
+                "ip": "10.5.0.170",
             },
-            "10.5.0.182": {
+            "name14": {
                 "borders": [
                     [(29, 493), (107, 444), (168, 543), (81, 598)],
                     [(168, 543), (182, 533), (194, 550), (297, 487), (245, 429), (138, 491)],
@@ -347,9 +347,9 @@ class BroomDetector:
                     [(1011, 463), (1116, 528), (1160, 451), (1069, 396)],
                     [(1116, 528), (1189, 576), (1228, 492), (1160, 451)],
                 ],
-                "name": "nama14",
+                "ip": "10.5.0.182",
             },
-            "10.5.0.161": {
+            "name15": {
                 "borders": [
                     [(128, 592), (302, 604), (298, 712), (110, 714)],
                     [(466, 709), (298, 712), (302, 604), (466, 609)],
@@ -396,10 +396,10 @@ class BroomDetector:
                     [(1063, 149), (1018, 144), (1052, 192), (1090, 249), (1137, 246)],
                     [(1137, 246), (1090, 249), (1129, 310), (1158, 354), (1205, 338)],
                 ],
-                "name": "nama15",
+                "ip": "10.5.0.161",
             },
-            # Gudang
-            "10.5.0.110": {
+            # Inventory Cameras
+            "name16": {
                 "borders": [
                     [(632, 9), (616, 58), (664, 69), (674, 6)],
                     [(674, 6), (723, 4), (735, 86), (664, 69)],
@@ -424,9 +424,9 @@ class BroomDetector:
                     [(688, 600), (801, 617), (805, 713), (683, 713)],
                     [(929, 631), (801, 617), (805, 713), (936, 713)],
                 ],
-                "name": "nama16",
+                "name": "10.5.0.110",
             },
-            "10.5.0.180": {
+            "name17": {
                 "borders": [
                     [(713, 41), (664, 44), (671, 90), (731, 87)],
                     [(664, 44), (602, 48), (597, 95), (671, 90)],
@@ -456,9 +456,9 @@ class BroomDetector:
                     [(539, 712), (546, 638), (744, 634), (751, 713)],
                     [(902, 621), (744, 634), (751, 713), (922, 713)],
                 ],
-                "name": "nama17",
+                "name": "10.5.0.180",
             },
-            "10.5.0.185": {
+            "name18": {
                 "borders": [
                     [(652, 108), (720, 110), (719, 129), (647, 126)],
                     [(647, 126), (719, 129), (718, 155), (639, 149)],
@@ -477,16 +477,16 @@ class BroomDetector:
                     [(700, 458), (863, 462), (882, 576), (692, 574)],
                     [(882, 576), (692, 574), (683, 649), (677, 714), (904, 711)],
                 ],
-                "name": "nama18",
+                "name": "10.5.0.185",
             },
         }
 
-        ip_cameras = list(config.keys())
-        indices = {name: idx + 1 for idx, name in enumerate(ip_cameras)}
-        borders = config[ip_camera]["borders"]
-        name = config[ip_camera]["name"]
-        index = indices[ip_camera]
-        return borders, index, name
+        borders = config[self.camera_name]["borders"]
+        ip = config[self.camera_name]["ip"]
+        camera_names = list(config.keys())
+        indices = {name: idx + 1 for idx, name in enumerate(camera_names)}
+        index = indices[self.camera_name]
+        return borders, ip, index
 
     def process_model(self, frame):
         with torch.no_grad():
@@ -724,7 +724,7 @@ class BroomDetector:
             cursor = connection.cursor()
             table = "empbro"
             category = "Menyapu Lantai"
-            ip_camera = self.camera_name
+            camera_name = self.camera_name
             timestamp_done = datetime.now()
             timestamp_start = timestamp_done - timedelta(seconds=elapsed_time)
 
@@ -754,7 +754,7 @@ class BroomDetector:
             cursor.execute(
                 query,
                 (
-                    ip_camera,
+                    camera_name,
                     category,
                     timestamp_start_str,
                     timestamp_done_str,
@@ -782,7 +782,7 @@ class BroomDetector:
         self.frame_thread.daemon = True
         self.frame_thread.start()
 
-        window_name = f"BROOM{self.idx} : {self.ip_camera}"
+        window_name = f"BROOM{self.idx} : {self.camera_name}"
         cv2.namedWindow(window_name, cv2.WINDOW_NORMAL)
         cv2.resizeWindow(window_name, self.window_width, self.window_height)
 
@@ -830,12 +830,12 @@ class BroomDetector:
         self.frame_thread.join()
 
 
-def run_broom(BROOM_ABSENCE_THRESHOLD, BROOM_TOUCH_THRESHOLD, BROOM_PERCENTAGE_GREEN_THRESHOLD, ip_camera, window_size=(540, 360)):
+def run_broom(BROOM_ABSENCE_THRESHOLD, BROOM_TOUCH_THRESHOLD, BROOM_PERCENTAGE_GREEN_THRESHOLD, camera_name, window_size=(540, 360)):
     detector = BroomDetector(
         BROOM_ABSENCE_THRESHOLD=BROOM_ABSENCE_THRESHOLD,
         BROOM_TOUCH_THRESHOLD=BROOM_TOUCH_THRESHOLD,
         BROOM_PERCENTAGE_GREEN_THRESHOLD=BROOM_PERCENTAGE_GREEN_THRESHOLD,
-        ip_camera=ip_camera,
+        camera_name=camera_name,
         window_size=window_size,
     )
 
@@ -847,6 +847,6 @@ if __name__ == "__main__":
         BROOM_ABSENCE_THRESHOLD=30,
         BROOM_TOUCH_THRESHOLD=0,
         BROOM_PERCENTAGE_GREEN_THRESHOLD=50,
-        ip_camera="10.5.0.252",
+        camera_name="name13",
         window_size=(540, 360),
     )
