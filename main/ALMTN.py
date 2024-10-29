@@ -191,7 +191,7 @@ class MotorDetector:
     def send_to_server(
         self,
         host,
-        activity,
+        category,
         border_id,
         timestamp_start,
         timestamp_done,
@@ -222,12 +222,12 @@ class MotorDetector:
             if db_id is None:
                 # Insert new record
                 query = f"""
-                INSERT INTO {table} (cam, activity, border, timestamp_start, image_start)
+                INSERT INTO {table} (cam, category, border, timestamp_start, image_start)
                 VALUES (%s, %s, %s, %s, %s)
                 """
                 data = (
                     camera_name,
-                    activity,
+                    category,
                     border_id,
                     timestamp_start.strftime("%Y-%m-%d %H:%M:%S") if timestamp_start else None,
                     image_start,
@@ -332,7 +332,7 @@ class MotorDetector:
                         # Send data to server with image_start and get db_id
                         db_id = self.send_to_server(
                             host="10.5.0.2",
-                            activity="Motorcycle Detected",
+                            category="Motorcycle Detected",
                             border_id=border_id,
                             timestamp_start=datetime.now(),
                             timestamp_done=None,
@@ -381,7 +381,7 @@ class MotorDetector:
                             if state["db_id"] is not None:
                                 self.send_to_server(
                                     host="10.5.0.2",
-                                    activity="Motorcycle Detected",
+                                    category="Motorcycle Detected",
                                     border_id=border_id,
                                     timestamp_start=None,
                                     timestamp_done=datetime.now(),
@@ -572,5 +572,5 @@ if __name__ == "__main__":
         MOTOR_CONFIDENCE_THRESHOLD=0,
         camera_name="10.5.0.206",
         window_size=(540, 360),
-        rtsp_url="videos/1028(2).mp4",
+        # rtsp_url="videos/1028(2).mp4",
     )
