@@ -14,7 +14,7 @@ import queue
 
 
 class BroomDetector:
-    def __init__(self, BROOM_ABSENCE_THRESHOLD=10, BROOM_TOUCH_THRESHOLD=0, BROOM_PERCENTAGE_GREEN_THRESHOLD=50, BROOM_CONFIDENCE_THRESHOLD=0.9, broom_model="broom5l_11.pt", camera_name=None, new_size=(960, 540), rtsp_url=None, window_size=(540, 360)):
+    def __init__(self, BROOM_ABSENCE_THRESHOLD=10, BROOM_TOUCH_THRESHOLD=0, BROOM_PERCENTAGE_GREEN_THRESHOLD=50, BROOM_CONFIDENCE_THRESHOLD=0.9, broom_model="broom5l_11.pt", ip_camera=None, new_size=(960, 540), rtsp_url=None, window_size=(540, 360)):
         self.BROOM_CONFIDENCE_THRESHOLD = BROOM_CONFIDENCE_THRESHOLD
         self.BROOM_ABSENCE_THRESHOLD = BROOM_ABSENCE_THRESHOLD
         self.BROOM_TOUCH_THRESHOLD = BROOM_TOUCH_THRESHOLD
@@ -32,12 +32,12 @@ class BroomDetector:
         self.fps = 0
         self.first_green_time = None
         self.is_counting = False
-        self.camera_name = camera_name
+        self.ip_camera = ip_camera
         if rtsp_url is None:
-            self.rtsp_url = f"rtsp://admin:oracle2015@{camera_name}:554/Streaming/Channels/1"
+            self.rtsp_url = f"rtsp://admin:oracle2015@{ip_camera}:554/Streaming/Channels/1"
         else:
             self.rtsp_url = rtsp_url
-        self.borders, self.idx = self.camera_config(camera_name)
+        self.borders, self.idx = self.camera_config(ip_camera)
         self.show_text = True
         self.frame_queue = queue.Queue(maxsize=10)
         self.stop_event = threading.Event()
@@ -65,7 +65,7 @@ class BroomDetector:
         self.broom_model.overrides["verbose"] = False
         print(f"Model Broom device: {next(self.broom_model.model.parameters()).device}")
 
-    def camera_config(self, camera_name):
+    def camera_config(self, ip_camera):
         config = {
             "10.5.0.182": [[(29, 493), (107, 444), (168, 543), (81, 598)], [(168, 543), (182, 533), (194, 550), (297, 487), (245, 429), (138, 491)], [(194, 550), (297, 487), (390, 581), (269, 654)], [(269, 654), (390, 581), (509, 687), (466, 714), (318, 714)], [(466, 714), (684, 714), (579, 642), (509, 687)], [(509, 687), (579, 642), (646, 595), (518, 502), (390, 581)], [(390, 581), (518, 502), (414, 418), (297, 487)], [(245, 429), (268, 418), (255, 356), (309, 324), (414, 418), (297, 487)], [(579, 642), (646, 595), (710, 550), (843, 637), (758, 713), (684, 714)], [(309, 324), (414, 418), (528, 355), (406, 271)], [(406, 271), (500, 235), (628, 305), (528, 355)], [(518, 502), (414, 418), (528, 355), (641, 428)], [(518, 502), (646, 595), (710, 550), (766, 506), (641, 428)], [(710, 550), (843, 637), (941, 544), (816, 468), (766, 506)], [(758, 713), (843, 637), (975, 714)], [(975, 714), (843, 637), (941, 544), (1056, 616)], [(975, 714), (1114, 713), (1143, 665), (1056, 616)], [(1143, 665), (1056, 616), (1116, 528), (1189, 576)], [(1056, 616), (1116, 528), (1011, 463), (941, 544)], [(816, 468), (941, 544), (1011, 463), (899, 397)], [(528, 355), (641, 428), (764, 349), (662, 290), (628, 305)], [(641, 428), (766, 506), (816, 468), (875, 419), (764, 349)], [(875, 419), (899, 397), (968, 339), (868, 281), (764, 349)], [(764, 349), (868, 281), (777, 235), (662, 290)], [(899, 397), (1011, 463), (1069, 396), (968, 339)], [(1011, 463), (1116, 528), (1160, 451), (1069, 396)], [(1116, 528), (1189, 576), (1228, 492), (1160, 451)]],
             "10.5.0.170": [[(688, 98), (737, 100), (739, 137), (684, 136)], [(790, 103), (737, 100), (739, 137), (803, 140)], [(684, 136), (739, 137), (743, 173), (679, 170)], [(803, 140), (739, 137), (743, 173), (814, 177)], [(679, 170), (743, 173), (747, 208), (672, 205)], [(814, 177), (743, 173), (747, 208), (826, 214)], [(672, 205), (747, 208), (752, 253), (668, 249)], [(826, 214), (747, 208), (752, 253), (839, 258)], [(668, 249), (752, 253), (755, 302), (662, 299)], [(839, 258), (752, 253), (755, 302), (854, 305)], [(662, 299), (755, 302), (759, 360), (657, 355)], [(854, 305), (755, 302), (759, 360), (869, 362)], [(657, 355), (759, 360), (760, 431), (645, 429)], [(869, 362), (759, 360), (760, 431), (883, 436)], [(645, 429), (760, 431), (760, 526), (631, 520)], [(883, 436), (760, 431), (760, 526), (904, 529)], [(631, 520), (760, 526), (762, 644), (606, 639)], [(904, 529), (760, 526), (762, 644), (923, 644)], [(606, 639), (762, 644), (923, 644), (932, 710), (596, 710)]],
@@ -86,9 +86,9 @@ class BroomDetector:
             "10.5.0.217": [[(619, 95), (706, 96), (717, 150), (614, 155)], [(614, 155), (717, 150), (730, 211), (607, 215)], [(607, 215), (730, 211), (746, 285), (601, 291)], [(601, 291), (746, 285), (758, 366), (593, 369)], [(593, 369), (758, 366), (773, 437), (589, 442)], [(589, 442), (773, 437), (784, 503), (581, 508)], [(581, 508), (455, 509), (435, 606), (576, 612)], [(581, 508), (689, 506), (692, 610), (576, 612)], [(689, 506), (784, 503), (850, 498), (866, 593), (692, 610)], [(576, 612), (571, 718), (820, 717), (802, 596), (692, 610)]],
             "10.5.0.252": [[(623, 159), (705, 155), (716, 208), (619, 211)], [(619, 211), (716, 208), (728, 270), (611, 276)], [(611, 276), (728, 270), (741, 343), (603, 347)], [(603, 347), (741, 343), (757, 445), (597, 450)], [(597, 450), (475, 457), (468, 614), (584, 617), (597, 450)], [(597, 450), (757, 445), (781, 607), (584, 617)], [(757, 445), (876, 438), (900, 536), (860, 573), (860, 592), (781, 607)], [(584, 617), (781, 607), (795, 715), (581, 718)]]
         }
-        camera_names = list(config.keys())
-        indices = {name: idx + 1 for idx, name in enumerate(camera_names)}
-        return config[camera_name], indices[camera_name]
+        ip_cameras = list(config.keys())
+        indices = {name: idx + 1 for idx, name in enumerate(ip_cameras)}
+        return config[ip_camera], indices[ip_camera]
 
     def process_model(self, frame):
         with torch.no_grad():
@@ -326,7 +326,7 @@ class BroomDetector:
             cursor = connection.cursor()
             table = "empbro"
             category = "Menyapu Lantai"
-            camera_name = self.camera_name
+            ip_camera = self.ip_camera
             timestamp_done = datetime.now()
             timestamp_start = timestamp_done - timedelta(seconds=elapsed_time)
 
@@ -356,7 +356,7 @@ class BroomDetector:
             cursor.execute(
                 query,
                 (
-                    camera_name,
+                    ip_camera,
                     category,
                     timestamp_start_str,
                     timestamp_done_str,
@@ -384,7 +384,7 @@ class BroomDetector:
         self.frame_thread.daemon = True
         self.frame_thread.start()
 
-        window_name = f"BROOM{self.idx} : {self.camera_name}"
+        window_name = f"BROOM{self.idx} : {self.ip_camera}"
         cv2.namedWindow(window_name, cv2.WINDOW_NORMAL)
         cv2.resizeWindow(window_name, self.window_width, self.window_height)
 
@@ -432,12 +432,12 @@ class BroomDetector:
         self.frame_thread.join()
 
 
-def run_broom(BROOM_ABSENCE_THRESHOLD, BROOM_TOUCH_THRESHOLD, BROOM_PERCENTAGE_GREEN_THRESHOLD, camera_name, window_size=(540, 360)):
+def run_broom(BROOM_ABSENCE_THRESHOLD, BROOM_TOUCH_THRESHOLD, BROOM_PERCENTAGE_GREEN_THRESHOLD, ip_camera, window_size=(540, 360)):
     detector = BroomDetector(
         BROOM_ABSENCE_THRESHOLD=BROOM_ABSENCE_THRESHOLD,
         BROOM_TOUCH_THRESHOLD=BROOM_TOUCH_THRESHOLD,
         BROOM_PERCENTAGE_GREEN_THRESHOLD=BROOM_PERCENTAGE_GREEN_THRESHOLD,
-        camera_name=camera_name,
+        ip_camera=ip_camera,
         window_size=window_size,
     )
 
@@ -449,6 +449,6 @@ if __name__ == "__main__":
         BROOM_ABSENCE_THRESHOLD=30,
         BROOM_TOUCH_THRESHOLD=0,
         BROOM_PERCENTAGE_GREEN_THRESHOLD=50,
-        camera_name="10.5.0.202",
+        ip_camera="10.5.0.252",
         window_size=(540, 360),
     )
