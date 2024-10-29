@@ -456,7 +456,7 @@ class BroomDetector:
                     [(688, 600), (801, 617), (805, 713), (683, 713)],
                     [(929, 631), (801, 617), (805, 713), (936, 713)],
                 ],
-                "name": "10.5.0.110",
+                "ip": "10.5.0.110",
             },
             "GUDANGACC4": {
                 "borders": [
@@ -488,7 +488,7 @@ class BroomDetector:
                     [(539, 712), (546, 638), (744, 634), (751, 713)],
                     [(902, 621), (744, 634), (751, 713), (922, 713)],
                 ],
-                "name": "10.5.0.180",
+                "ip": "10.5.0.180",
             },
             "METALDET2": {
                 "borders": [
@@ -509,7 +509,7 @@ class BroomDetector:
                     [(700, 458), (863, 462), (882, 576), (692, 574)],
                     [(882, 576), (692, 574), (683, 649), (677, 714), (904, 711)],
                 ],
-                "name": "10.5.0.185",
+                "ip": "10.5.0.185",
             },
         }
 
@@ -937,7 +937,7 @@ if __name__ == "__main__":
         BROOM_ABSENCE_THRESHOLD=30,
         BROOM_TOUCH_THRESHOLD=0,
         BROOM_PERCENTAGE_GREEN_THRESHOLD=50,
-        camera_name="OFFICE2",
+        camera_name="METALDET2",
         window_size=(540, 360),
-        rtsp_url="videos/test1.mp4",
+        # rtsp_url="videos/test1.mp4",
     )
