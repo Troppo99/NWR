@@ -327,26 +327,6 @@ class BroomDetector:
             table = "empbro"
             category = "Menyapu Lantai"
             camera_name = self.camera_name
-            if camera_name == "10.5.0.182":
-                camera_name = "OFFICE2"
-            elif camera_name == "10.5.0.170":
-                camera_name = "OFFICE1"
-            elif camera_name == "10.5.0.161":
-                camera_name = "OFFICE3"
-            elif camera_name == "10.5.0.110":
-                camera_name = "OFFICE4"
-            elif camera_name == "10.5.0.180":
-                camera_name = "OFFICE5"
-            elif camera_name == "10.5.0.185":
-                camera_name = "OFFICE6"
-            elif camera_name == "10.5.0.146":
-                camera_name = "OFFICE7"
-            elif camera_name == "10.5.0.183":
-                camera_name = "OFFICE8"
-            elif camera_name == "10.5.0.195":
-                camera_name = "OFFICE9"
-            elif camera_name == "10.5.0.201":
-                camera_name = "OFFICE10"
             timestamp_done = datetime.now()
             timestamp_start = timestamp_done - timedelta(seconds=elapsed_time)
 
