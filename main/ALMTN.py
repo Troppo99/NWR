@@ -555,14 +555,7 @@ class MotorDetector:
             self.frame_thread.join()
 
 
-def run_motor(
-    MOTOR_ABSENCE_THRESHOLD,
-    MOTOR_TOUCH_THRESHOLD,
-    MOTOR_CONFIDENCE_THRESHOLD,
-    camera_name,
-    window_size=(540, 360),
-    rtsp_url=None,
-):
+def run_motor(MOTOR_ABSENCE_THRESHOLD, MOTOR_TOUCH_THRESHOLD, MOTOR_CONFIDENCE_THRESHOLD, camera_name, window_size=(540, 360), rtsp_url=None):
     detector = MotorDetector(
         MOTOR_ABSENCE_THRESHOLD=MOTOR_ABSENCE_THRESHOLD,
         MOTOR_TOUCH_THRESHOLD=MOTOR_TOUCH_THRESHOLD,
