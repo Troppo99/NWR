@@ -427,14 +427,7 @@ class MotorDetector:
         if boxes_info:
             for x1, y1, x2, y2, conf, class_id in boxes_info:
                 # Draw bounding boxes
-                cvzone.cornerRect(
-                    frame_resized,
-                    (x1, y1, x2 - x1, y2 - y1),
-                    l=10,
-                    t=2,
-                    colorR=(0, 255, 255),
-                    colorC=(255, 255, 255),
-                )
+                cvzone.cornerRect(frame_resized, (x1, y1, x2 - x1, y2 - y1), l=10, t=2, colorR=(0, 255, 255), colorC=(255, 255, 255))
 
         overlay = frame_resized.copy()
         alpha = 0.5

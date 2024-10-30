@@ -184,14 +184,7 @@ class PuddleDetector:
         self.overlay_image_alpha(frame_resized, self.icon_bgr, (20, 120), self.icon_alpha)
 
         # Display the total objects on the right side of the image
-        cvzone.putTextRect(
-            frame_resized,
-            f"TOTAL PUDDLES : {total_objects}",
-            (text_x_position, 180),
-            scale=2.5,
-            thickness=2,
-            colorR=(235, 183, 23),
-        )
+        cvzone.putTextRect(frame_resized, f"TOTAL PUDDLES : {total_objects}", (text_x_position, 180), scale=2.5, thickness=2, colorR=(235, 183, 23))
 
         # Conditional display for check or attention icon and message
         if total_objects == 0:
