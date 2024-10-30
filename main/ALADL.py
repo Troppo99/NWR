@@ -149,6 +149,17 @@ class PuddleDetector:
             results = self.puddle_model(frame)
         return results
 
+    def export_frame(self, results):
+        boxes_info = []
+        for result in results:
+            for box in result.boxes:
+                x1, y1, x2, y2 = map(int, box.xyxy[0])
+                conf = box.conf[0]
+                class_id = self.puddle_model.names[int(box.cls[0])]
+                if conf > self.PUDDLE_CONFIDENCE_THRESHOLD and class_id == "puddle":
+                    boxes_info.append((x1, y1, x2, y2, conf, class_id))
+        return boxes_info
+
     def overlay_image_alpha(self, img, img_overlay, pos, alpha_mask):
         x, y = pos
         h, w = img_overlay.shape[0], img_overlay.shape[1]
@@ -163,14 +174,7 @@ class PuddleDetector:
     def process_frame(self, frame):
         frame_resized = cv2.resize(frame, (self.new_width, self.new_height))
         results = self.process_model(frame_resized)
-        boxes_info = []
-        for result in results:
-            for box in result.boxes:
-                x1, y1, x2, y2 = map(int, box.xyxy[0])
-                conf = math.ceil(box.conf[0] * 100) / 100
-                class_id = self.puddle_model.names[int(box.cls[0])]
-                if conf > self.PUDDLE_CONFIDENCE_THRESHOLD:
-                    boxes_info.append((x1, y1, x2, y2, conf, class_id))
+        boxes_info = self.export_frame(results)
 
         total_objects = len(boxes_info)
         icon_width = self.icon_image_resized.shape[1]
