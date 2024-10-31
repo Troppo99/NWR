@@ -580,6 +580,7 @@ class BroomDetector:
                 intersection = cv2.intersectConvexConvex(border_contour, box_contour)[1]
                 if intersection is not None and cv2.contourArea(intersection) > 0:
                     broom_overlapping = True
+                    broom_overlapping_any_border = True
                     break
 
             if broom_overlapping:
