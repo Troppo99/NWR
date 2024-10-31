@@ -937,7 +937,7 @@ if __name__ == "__main__":
         BROOM_ABSENCE_THRESHOLD=30,
         BROOM_TOUCH_THRESHOLD=0,
         BROOM_PERCENTAGE_GREEN_THRESHOLD=50,
-        camera_name="METALDET2",
+        camera_name="OFFICE2",
         window_size=(540, 360),
-        # rtsp_url="videos/test1.mp4",
+        rtsp_url="videos/test1.mp4",
     )
