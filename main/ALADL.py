@@ -335,10 +335,10 @@ if __name__ == "__main__":
         "attention_icon": "D:/SBHNL/Images/AHMDL/Icon/attention_icon.png",
     }
     run_puddle(
-        PUDDLE_CONFIDENCE_THRESHOLD=0.5,
+        PUDDLE_CONFIDENCE_THRESHOLD=0,
         camera_name="PUDDLE1",
         window_size=(1280, 720),
-        rtsp_url="D:/SBHNL/Videos/AHMDL/Test/0926(1).mp4",  # Update this path as needed
         puddle_model_path="D:/SBHNL/Resources/Models/Pretrained/PUDDLE/P_V3/weights/best.pt",
         icon_paths=icon_paths,
+        # rtsp_url="D:/SBHNL/Videos/AHMDL/Test/0926(1).mp4",  # Update this path as needed
     )

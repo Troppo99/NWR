@@ -26,8 +26,8 @@ db_config = {
 }
 
 # Direktori screenshot unik untuk GUDANG_5s
-screenshot_save_path_line = "D:/AI_SOURCE/CUTTING9/RED_LINE"
-screenshot_save_path_area = "D:/AI_SOURCE/CUTTING9/GREEN_AREA"
+screenshot_save_path_line = "D:/TRIAL/AI_SOURCE/CUTTING9/RED_LINE"
+screenshot_save_path_area = "D:/TRIAL/AI_SOURCE/CUTTING9/GREEN_AREA"
 
 # Pastikan direktori screenshot ada
 os.makedirs(screenshot_save_path_line, exist_ok=True)
@@ -65,9 +65,7 @@ def load_data(pkl_file):
             polygon_id_counter = data.get("polygon_id_counter", 1)
         logging.info(f"Data garis dan polygon telah dimuat dari {pkl_file}.")
     except FileNotFoundError:
-        logging.warning(
-            f"Tidak ada data garis dan polygon yang disimpan sebelumnya di {pkl_file}."
-        )
+        logging.warning(f"Tidak ada data garis dan polygon yang disimpan sebelumnya di {pkl_file}.")
     except Exception as e:
         logging.error(f"Error memuat data dari {pkl_file}: {e}")
 
@@ -107,12 +105,8 @@ def load_baseline_histogram(pkl_file):
             for bl_polygon in baseline_polygons:
                 for polygon in polygons:
                     if polygon["id"] == bl_polygon["id"]:
-                        polygon["default_histogram"] = bl_polygon.get(
-                            "default_histogram"
-                        )
-                        logging.info(
-                            f"Default histogram diperbarui untuk {polygon['id']}"
-                        )
+                        polygon["default_histogram"] = bl_polygon.get("default_histogram")
+                        logging.info(f"Default histogram diperbarui untuk {polygon['id']}")
         logging.info(f"Baseline histogram telah dimuat dari {pkl_file}.")
     except FileNotFoundError:
         logging.warning(f"Baseline file {pkl_file} tidak ditemukan.")
@@ -129,9 +123,7 @@ def initialize_pkl_schedule(schedule):
     next_pkl_path = None
 
     for hour, minute, pkl_path in schedule:
-        switch_time = current_time.replace(
-            hour=hour, minute=minute, second=0, microsecond=0
-        )
+        switch_time = current_time.replace(hour=hour, minute=minute, second=0, microsecond=0)
         if current_time >= switch_time:
             last_switch_time = switch_time
             last_pkl_path = pkl_path
@@ -146,9 +138,7 @@ def initialize_pkl_schedule(schedule):
     if next_switch_time is None:
         # Tidak ada switch time tersisa hari ini, set switch time pertama besok
         first_switch = schedule[0]
-        next_switch_time = (current_time + timedelta(days=1)).replace(
-            hour=first_switch[0], minute=first_switch[1], second=0, microsecond=0
-        )
+        next_switch_time = (current_time + timedelta(days=1)).replace(hour=first_switch[0], minute=first_switch[1], second=0, microsecond=0)
         next_pkl_path = first_switch[2]
 
     return last_pkl_path, next_switch_time, next_pkl_path
@@ -188,9 +178,7 @@ def draw(event, x, y, flags, param):
                     "color": (0, 255, 255),
                 }
             )
-            logging.info(
-                f"Garis {line_id_counter} ditambahkan dari {start_point} ke {end_point}."
-            )
+            logging.info(f"Garis {line_id_counter} ditambahkan dari {start_point} ke {end_point}.")
             line_id_counter += 1
 
 
@@ -214,9 +202,7 @@ def check_histogram_change(current_histogram, default_histogram, sensitivity=0.6
             return False
 
     # Lakukan perbandingan dengan korelasi
-    hist_diff = cv2.compareHist(
-        default_histogram, current_histogram, cv2.HISTCMP_CORREL
-    )
+    hist_diff = cv2.compareHist(default_histogram, current_histogram, cv2.HISTCMP_CORREL)
 
     # Sensitivitas menentukan batasan perbedaan yang dapat diterima
     return hist_diff < (1.0 - sensitivity)
@@ -266,9 +252,7 @@ def capture_and_save_screenshot(frame, object_id, mid_point, save_path, object_t
     return save_path  # Kembalikan path untuk disimpan ke database
 
 
-def insert_into_database(
-    timestamp, cam_name, no_line, time_detect, status, path_capture
-):
+def insert_into_database(timestamp, cam_name, no_line, time_detect, status, path_capture):
     """Fungsi untuk memasukkan data ke tabel line_detectx."""
     try:
         sql = """INSERT INTO line_detect2 (timestamp, cam_name, no_line, time_detect, status, path_capture)
@@ -287,9 +271,7 @@ def display_countdown_and_violation(frame, save_path, object_type="LINE", y_star
     current_time = time.time()
     for object_id, timer_data in list(countdown_timers.items()):
         # Hanya proses ID yang sesuai dengan object_type
-        if (object_type == "LINE" and object_id.startswith("LINE")) or (
-            object_type == "AREA" and object_id.startswith("AREA")
-        ):
+        if (object_type == "LINE" and object_id.startswith("LINE")) or (object_type == "AREA" and object_id.startswith("AREA")):
             elapsed_time = current_time - timer_data["start_time"]
             remaining_time = int(180 - elapsed_time)
             if remaining_time > 0:
@@ -298,9 +280,7 @@ def display_countdown_and_violation(frame, save_path, object_type="LINE", y_star
                 # Insert data setiap detik dengan path_capture="0"
                 if int(elapsed_time) > timer_data["last_insert_time"]:
                     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                    insert_into_database(
-                        timestamp, "CUTTING9", object_id, 1, status, "0"
-                    )
+                    insert_into_database(timestamp, "CUTTING9", object_id, 1, status, "0")
                     countdown_timers[object_id]["last_insert_time"] = int(elapsed_time)
 
                 # Capture pada detik ke-5 countdown (remaining_time == 5)
@@ -309,37 +289,25 @@ def display_countdown_and_violation(frame, save_path, object_type="LINE", y_star
                         for line in lines:
                             if line["id"] == object_id:
                                 mid_point = (
-                                    (line["start_point"][0] + line["end_point"][0])
-                                    // 2,
-                                    (line["start_point"][1] + line["end_point"][1])
-                                    // 2,
+                                    (line["start_point"][0] + line["end_point"][0]) // 2,
+                                    (line["start_point"][1] + line["end_point"][1]) // 2,
                                 )
-                                path = capture_and_save_screenshot(
-                                    frame, object_id, mid_point, save_path, object_type
-                                )
+                                path = capture_and_save_screenshot(frame, object_id, mid_point, save_path, object_type)
                                 countdown_timers[object_id]["path_capture"] = path
                                 countdown_timers[object_id]["captured"] = True
                                 # Insert data dengan path_capture
                                 timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                                insert_into_database(
-                                    timestamp, "CUTTING9", object_id, 1, status, path
-                                )
+                                insert_into_database(timestamp, "CUTTING9", object_id, 1, status, path)
                     elif object_type == "AREA":
                         for polygon in polygons:
                             if polygon["id"] == object_id:
-                                mid_point = np.mean(polygon["points"], axis=0).astype(
-                                    int
-                                )
-                                path = capture_and_save_screenshot(
-                                    frame, object_id, mid_point, save_path, object_type
-                                )
+                                mid_point = np.mean(polygon["points"], axis=0).astype(int)
+                                path = capture_and_save_screenshot(frame, object_id, mid_point, save_path, object_type)
                                 countdown_timers[object_id]["path_capture"] = path
                                 countdown_timers[object_id]["captured"] = True
                                 # Insert data dengan path_capture
                                 timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                                insert_into_database(
-                                    timestamp, "CUTTING9", object_id, 1, status, path
-                                )
+                                insert_into_database(timestamp, "CUTTING9", object_id, 1, status, path)
 
                 # Gambar countdown
                 y_position = y_start
@@ -361,46 +329,30 @@ def display_countdown_and_violation(frame, save_path, object_type="LINE", y_star
                 # Set violation_start_time jika belum di-set
                 if timer_data.get("violation_start_time") is None:
                     countdown_timers[object_id]["violation_start_time"] = current_time
-                    countdown_timers[object_id][
-                        "is_in_violation"
-                    ] = True  # Set flag menjadi True
+                    countdown_timers[object_id]["is_in_violation"] = True  # Set flag menjadi True
                     logging.info(f"Violation dimulai untuk {object_type} {object_id}.")
 
-                violation_start_time = countdown_timers[object_id][
-                    "violation_start_time"
-                ]
+                violation_start_time = countdown_timers[object_id]["violation_start_time"]
                 violation_elapsed = current_time - violation_start_time
                 violation_seconds = int(violation_elapsed)
 
                 # Insert data setiap detik selama violation dengan path_capture sesuai kondisi
-                if violation_seconds > countdown_timers[object_id].get(
-                    "violation_last_insert_time", 0
-                ):
+                if violation_seconds > countdown_timers[object_id].get("violation_last_insert_time", 0):
                     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
                     # Logika untuk path_capture
                     if countdown_timers[object_id].get("first_violation", True):
                         # Pelanggaran pertama: gunakan path_capture dari warning sebelumnya
                         path_capture = timer_data.get("path_capture", "0")
-                        countdown_timers[object_id][
-                            "first_violation"
-                        ] = False  # Set flag menjadi False setelah pelanggaran pertama
-                        logging.info(
-                            f"Pelanggaran pertama untuk {object_id}: path_capture disamakan dengan warning sebelumnya."
-                        )
+                        countdown_timers[object_id]["first_violation"] = False  # Set flag menjadi False setelah pelanggaran pertama
+                        logging.info(f"Pelanggaran pertama untuk {object_id}: path_capture disamakan dengan warning sebelumnya.")
                     else:
                         # Pelanggaran berikutnya: set path_capture ke "0"
                         path_capture = "0"
-                        logging.info(
-                            f"Pelanggaran berikutnya untuk {object_id}: path_capture diisi '0'."
-                        )
+                        logging.info(f"Pelanggaran berikutnya untuk {object_id}: path_capture diisi '0'.")
 
-                    insert_into_database(
-                        timestamp, "CUTTING9", object_id, 1, status, path_capture
-                    )
-                    countdown_timers[object_id][
-                        "violation_last_insert_time"
-                    ] = violation_seconds
+                    insert_into_database(timestamp, "CUTTING9", object_id, 1, status, path_capture)
+                    countdown_timers[object_id]["violation_last_insert_time"] = violation_seconds
 
                 # Update warna dan status
                 if object_type == "LINE":
@@ -475,9 +427,7 @@ def display_countdown_and_violation(frame, save_path, object_type="LINE", y_star
 
                 # Tambahkan object_id ke violation_timers jika belum ada
                 if object_id not in violation_timers:
-                    violation_timers[object_id] = (
-                        True  # Nilai tidak penting, hanya untuk penanda
-                    )
+                    violation_timers[object_id] = True  # Nilai tidak penting, hanya untuk penanda
 
 
 def clear_data_for_deleted_object(object_id, frame):
@@ -487,14 +437,8 @@ def clear_data_for_deleted_object(object_id, frame):
         logging.info(f"Countdown dihapus untuk {object_id}.")
     if object_id in violation_timers:
         object_type = "LINE" if "LINE" in object_id else "AREA"
-        save_path = (
-            screenshot_save_path_line
-            if object_type == "LINE"
-            else screenshot_save_path_area
-        )
-        handle_violation_end(
-            object_id, object_type, frame, save_path
-        )  # Pastikan fungsi ini diupdate sesuai kebutuhan
+        save_path = screenshot_save_path_line if object_type == "LINE" else screenshot_save_path_area
+        handle_violation_end(object_id, object_type, frame, save_path)  # Pastikan fungsi ini diupdate sesuai kebutuhan
     finished_countdown.discard(object_id)
     logging.info(f"Pelanggaran dihapus untuk {object_id}.")
 
@@ -523,12 +467,8 @@ def handle_violation_end(object_id, object_type, frame, save_path):
         cam_name = "CUTTING9"
         no_line = object_id
 
-        insert_into_database(
-            timestamp_db, cam_name, no_line, time_detect, status, save_file_path
-        )
-        logging.info(
-            f"Pelanggaran untuk {object_id} telah selesai dan data 'done' dimasukkan ke database."
-        )
+        insert_into_database(timestamp_db, cam_name, no_line, time_detect, status, save_file_path)
+        logging.info(f"Pelanggaran untuk {object_id} telah selesai dan data 'done' dimasukkan ke database.")
 
         # Hapus data pelanggaran
         del countdown_timers[object_id]
@@ -562,20 +502,14 @@ def check_polygon_violation(frame, gray_frame):
             if polygon["id"] in countdown_timers:
                 if countdown_timers[polygon["id"]].get("is_in_violation"):
                     # Violation telah berakhir
-                    handle_violation_end(
-                        polygon["id"], "AREA", frame, screenshot_save_path_area
-                    )
+                    handle_violation_end(polygon["id"], "AREA", frame, screenshot_save_path_area)
                 else:
                     # Hapus countdown jika kembali normal sebelum violation
                     del countdown_timers[polygon["id"]]
-                    logging.info(
-                        f"Countdown dihapus karena {polygon['id']} kembali normal."
-                    )
+                    logging.info(f"Countdown dihapus karena {polygon['id']} kembali normal.")
 
                 if polygon["id"] in violation_timers:
-                    handle_violation_end(
-                        polygon["id"], "AREA", frame, screenshot_save_path_area
-                    )
+                    handle_violation_end(polygon["id"], "AREA", frame, screenshot_save_path_area)
 
         # Gambar outline polygon
         cv2.polylines(
@@ -837,7 +771,13 @@ def main_monitoring():
                     if line["end_point"]:
                         # Buat mask untuk area garis
                         mask = np.zeros_like(gray_frame)
-                        cv2.line(mask, line["start_point"], line["end_point"], 255, thickness=5)
+                        cv2.line(
+                            mask,
+                            line["start_point"],
+                            line["end_point"],
+                            255,
+                            thickness=5,
+                        )
 
                         # Hitung histogram dari area garis
                         current_histogram = calculate_histogram(gray_frame, mask)
@@ -896,7 +836,12 @@ def main_monitoring():
                 else:
                     # Jika tidak ada switch time tersisa hari ini, set switch time pertama besok
                     first_switch = schedule[0]
-                    next_switch_time = (current_datetime + timedelta(days=1)).replace(hour=first_switch[0], minute=first_switch[1], second=0, microsecond=0)
+                    next_switch_time = (current_datetime + timedelta(days=1)).replace(
+                        hour=first_switch[0],
+                        minute=first_switch[1],
+                        second=0,
+                        microsecond=0,
+                    )
                     next_pkl_path = first_switch[2]
                 logging.info(f"Switch berikutnya dijadwalkan pada {next_switch_time.strftime('%Y-%m-%d %H:%M')} dengan file PKL: {next_pkl_path}")
 
