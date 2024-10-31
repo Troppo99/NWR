@@ -13,14 +13,25 @@ def start_processes(target_func, cameras, args, size):
 
 
 if __name__ == "__main__":
-    broom_list_cameras = ["OFFICE1", "OFFICE2", "OFFICE3"]
+    broom_list_cameras = [
+        "SEWING1",
+        "SEWING2",
+        "SEWING3",
+        "SEWING4",
+        "SEWING5",
+        "SEWING6",
+        "SEWING8",  
+        "OFFICE1",
+        "OFFICE2",
+        "OFFICE3",
+    ]
     carpal_list_cameras = ["OFFICE1", "OFFICE2", "OFFICE3"]
-    
+
     broom_args = (30, 0.005, 80)
     carpal_args = (30, 0.005, 80)
 
-    broom_processes = start_processes(run_broom, broom_list_cameras, broom_args, size=(480, 320))
-    carpal_processes = start_processes(run_carpal, carpal_list_cameras, carpal_args, size=(480, 320))
+    broom_processes = start_processes(run_broom, broom_list_cameras, broom_args, size=(320, 240))
+    carpal_processes = start_processes(run_carpal, carpal_list_cameras, carpal_args, size=(320, 240))
 
     for p in broom_processes + carpal_processes:
         p.join()
