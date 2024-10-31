@@ -20,8 +20,8 @@ class BroomDetector:
         BROOM_ABSENCE_THRESHOLD=10,
         BROOM_TOUCH_THRESHOLD=0,
         BROOM_PERCENTAGE_GREEN_THRESHOLD=50,
-        BROOM_CONFIDENCE_THRESHOLD=0.9,
-        broom_model="broom5l_11.pt",
+        BROOM_CONFIDENCE_THRESHOLD=0,
+        broom_model="broom6l.pt",
         camera_name=None,
         new_size=(960, 540),
         rtsp_url=None,
@@ -525,37 +525,16 @@ class BroomDetector:
             results = self.broom_model(frame, stream=True, imgsz=960)
         return results
 
-    def export_frame(self, results, color, pairs):
-        points = []
-        coords = []
-        keypoint_positions = []
-        confidence_threshold = self.BROOM_CONFIDENCE_THRESHOLD
-
+    def export_frame(self, results):
+        boxes_info = []
         for result in results:
-            keypoints_data = result.keypoints
-            if keypoints_data is not None and keypoints_data.xy is not None and keypoints_data.conf is not None:
-                if keypoints_data.shape[0] > 0:
-                    keypoints_array = keypoints_data.xy.cpu().numpy()
-                    keypoints_conf = keypoints_data.conf.cpu().numpy()
-                    for keypoints_per_object, keypoints_conf_per_object in zip(keypoints_array, keypoints_conf):
-                        keypoints_list = []
-                        for kp, kp_conf in zip(keypoints_per_object, keypoints_conf_per_object):
-                            if kp_conf >= confidence_threshold:
-                                x, y = kp[0], kp[1]
-                                keypoints_list.append((int(x), int(y)))
-                            else:
-                                keypoints_list.append(None)
-                        keypoint_positions.append(keypoints_list)
-                        for point in keypoints_list:
-                            if point is not None:
-                                points.append(point)
-                        for i, j in pairs:
-                            if i < len(keypoints_list) and j < len(keypoints_list):
-                                if keypoints_list[i] is not None and keypoints_list[j] is not None:
-                                    coords.append((keypoints_list[i], keypoints_list[j], color))
-                else:
-                    continue
-        return points, coords, keypoint_positions
+            for box in result.boxes:
+                x1, y1, x2, y2 = map(int, box.xyxy[0])
+                conf = box.conf[0]
+                class_id = self.broom_model.names[int(box.cls[0])]
+                if conf > self.BROOM_CONFIDENCE_THRESHOLD and (class_id == "broom" or class_id == "mop"):
+                    boxes_info.append((x1, y1, x2, y2, conf, class_id))
+        return boxes_info
 
     def frame_capture(self):
         rtsp_url = self.rtsp_url
@@ -580,10 +559,10 @@ class BroomDetector:
                     pass
             cap.release()
 
-    def process_frame(self, frame, current_time, percentage_green, pairs_broom):
+    def process_frame(self, frame, current_time, percentage_green):
         frame_resized = cv2.resize(frame, (self.new_width, self.new_height))
         results = self.process_model(frame_resized)
-        points, coords, keypoint_positions = self.export_frame(results, (0, 255, 0), pairs_broom)
+        boxes_info = self.export_frame(results)
 
         border_colors = [(0, 255, 0) if state["is_green"] else (0, 255, 255) for state in self.border_states.values()]
 
@@ -591,17 +570,16 @@ class BroomDetector:
 
         for border_id, border_pt in enumerate(self.borders_pts):
             broom_overlapping = False
-            for keypoints_list in keypoint_positions:
-                for idx in [2, 3, 4]:
-                    if idx < len(keypoints_list):
-                        kp = keypoints_list[idx]
-                        if kp is not None:
-                            result = cv2.pointPolygonTest(border_pt, kp, False)
-                            if result >= 0:
-                                broom_overlapping = True
-                                broom_overlapping_any_border = True
-                                break
-                if broom_overlapping:
+            border_polygon = np.array(border_pt, dtype=np.int32)
+            border_contour = border_polygon.reshape((-1, 1, 2))
+
+            for x1, y1, x2, y2, conf, class_id in boxes_info:
+                box_polygon = np.array([[x1, y1], [x2, y1], [x2, y2], [x1, y2]], dtype=np.int32)
+                box_contour = box_polygon.reshape((-1, 1, 2))
+
+                intersection = cv2.intersectConvexConvex(border_contour, box_contour)[1]
+                if intersection is not None and cv2.contourArea(intersection) > 0:
+                    broom_overlapping = True
                     break
 
             if broom_overlapping:
@@ -717,11 +695,11 @@ class BroomDetector:
             self.is_counting = False
             self.broom_absence_timer_start = None
 
-        if points and coords:
-            for x, y, color in coords:
-                cv2.line(frame_resized, x, y, color, 2)
-            for point in points:
-                cv2.circle(frame_resized, point, 4, (0, 255, 255), -1)
+        if boxes_info:
+            for x1, y1, x2, y2, conf, class_id in boxes_info:
+                # Draw bounding boxes
+                cvzone.cornerRect(frame_resized, (x1, y1, x2 - x1, y2 - y1), l=10, t=2, colorR=(0, 255, 255), colorC=(255, 255, 255))
+
         overlay = frame_resized.copy()
         alpha = 0.5
         for border_pt, color in zip(self.borders_pts, border_colors):
@@ -806,7 +784,6 @@ class BroomDetector:
                 connection.close()
 
     def main(self):
-        pairs_broom = [(0, 1), (1, 2), (2, 3), (2, 4)]
         process_every_n_frames = 2
         frame_count = 0
 
@@ -841,7 +818,7 @@ class BroomDetector:
                 green_borders = sum(1 for state in self.border_states.values() if state["is_green"])
                 percentage_green = (green_borders / total_borders) * 100
 
-                frame_resized = self.process_frame(frame, current_time, percentage_green, pairs_broom)
+                frame_resized = self.process_frame(frame, current_time, percentage_green)
 
                 if self.show_text:
                     cvzone.putTextRect(
@@ -894,7 +871,7 @@ class BroomDetector:
                 green_borders = sum(1 for state in self.border_states.values() if state["is_green"])
                 percentage_green = (green_borders / total_borders) * 100
 
-                frame_resized = self.process_frame(frame, current_time, percentage_green, pairs_broom)
+                frame_resized = self.process_frame(frame, current_time, percentage_green)
 
                 if self.show_text:
                     cvzone.putTextRect(
@@ -934,7 +911,7 @@ def run_broom(BROOM_ABSENCE_THRESHOLD, BROOM_TOUCH_THRESHOLD, BROOM_PERCENTAGE_G
 
 if __name__ == "__main__":
     run_broom(
-        BROOM_ABSENCE_THRESHOLD=30,
+        BROOM_ABSENCE_THRESHOLD=3,
         BROOM_TOUCH_THRESHOLD=0,
         BROOM_PERCENTAGE_GREEN_THRESHOLD=50,
         camera_name="OFFICE2",
