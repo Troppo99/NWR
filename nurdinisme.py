@@ -3,10 +3,11 @@ import numpy as np
 import time
 import os
 from datetime import datetime, timedelta
-import pickle  # Untuk menyimpan dan memuat data
-import mysql.connector  # Untuk koneksi database
-import threading  # Untuk menjalankan fungsi secara paralel
-import logging  # Untuk logging
+import pickle
+import mysql.connector
+import threading
+import queue
+import logging
 
 # Konfigurasi logging
 logging.basicConfig(
@@ -14,45 +15,6 @@ logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s - %(levelname)s - %(message)s",
 )
-
-# Inisialisasi RTSP Stream untuk GUDANG_5s
-rtsp_url = "rtsp://admin:oracle2015@10.5.0.120:554/Streaming/Channels/1"  # Sesuaikan URL RTSP untuk GUDANG_5s
-cap = cv2.VideoCapture(rtsp_url)
-
-if not cap.isOpened():
-    logging.error("Tidak dapat membuka stream RTSP.")
-    exit()
-
-# Variabel untuk menggambar garis dan polygon
-drawing = False
-polygon_mode = False
-start_point = None
-end_point = None
-lines = []  # Menyimpan garis yang sudah terbentuk
-polygons = []  # Menyimpan polygon yang sudah terbentuk
-polygon_points = []  # Menyimpan titik-titik polygon sementara
-current_mouse_position = (0, 0)  # Menyimpan posisi mouse saat ini
-previous_frame = None  # Untuk menyimpan frame sebelumnya
-
-# Counter untuk ID garis dan polygon
-line_id_counter = 1
-polygon_id_counter = 1
-
-# Timer dictionary untuk countdown dan pelanggaran per ID Line dan Polygon
-countdown_timers = {}
-violation_timers = {}
-finished_countdown = set()  # Set untuk menyimpan ID yang sudah selesai countdown
-
-# Warna lingkaran
-circle_color = (0, 255, 255)  # Kuning (BGR)
-
-# Direktori screenshot unik untuk GUDANG_5s
-screenshot_save_path_line = "D:/AI_SOURCE/CUTTING9/RED_LINE"
-screenshot_save_path_area = "D:/AI_SOURCE/CUTTING9/GREEN_AREA"
-
-# Pastikan direktori screenshot ada
-os.makedirs(screenshot_save_path_line, exist_ok=True)
-os.makedirs(screenshot_save_path_area, exist_ok=True)
 
 # Konfigurasi database
 db_config = {
@@ -63,15 +25,13 @@ db_config = {
     "port": 3307,
 }
 
-# Koneksi ke database
-try:
-    db_connection = mysql.connector.connect(**db_config)
-    db_connection.autocommit = True  # Aktifkan autocommit
-    cursor = db_connection.cursor()
-    logging.info("Koneksi ke database berhasil.")
-except mysql.connector.Error as err:
-    logging.error(f"Error koneksi database: {err}")
-    exit()
+# Direktori screenshot unik untuk GUDANG_5s
+screenshot_save_path_line = "D:/AI_SOURCE/CUTTING9/RED_LINE"
+screenshot_save_path_area = "D:/AI_SOURCE/CUTTING9/GREEN_AREA"
+
+# Pastikan direktori screenshot ada
+os.makedirs(screenshot_save_path_line, exist_ok=True)
+os.makedirs(screenshot_save_path_area, exist_ok=True)
 
 # Penjadwalan file PKL berdasarkan waktu
 schedule = [
@@ -640,273 +600,318 @@ def check_polygon_violation(frame, gray_frame):
         )
 
 
-# Panggil fungsi load_data() pada startup dengan PKL pertama sesuai jadwal
-current_pkl_file, next_switch_time, next_pkl_path = initialize_pkl_schedule(schedule)
-load_data(current_pkl_file)  # Memuat garis dan polygon dari PKL pertama
-update_baseline_from_pkl(current_pkl_file)  # Memuat baseline histogram dari PKL pertama
+def frame_capture_thread(rtsp_url, frame_queue, stop_event):
+    """Thread untuk mengambil frame dari RTSP dan memasukkannya ke dalam queue."""
+    while not stop_event.is_set():
+        cap = cv2.VideoCapture(rtsp_url)
+        if not cap.isOpened():
+            logging.error("Tidak dapat membuka stream RTSP. Mencoba kembali dalam 5 detik...")
+            cap.release()
+            time.sleep(5)
+            continue
 
-cv2.namedWindow("RTSP Stream - Monitoring")
-cv2.setMouseCallback("RTSP Stream - Monitoring", draw)
+        logging.info("Berhasil terhubung ke RTSP stream.")
 
-while True:
-    ret, frame = cap.read()
-    if not ret:
-        logging.error("Tidak dapat membaca frame dari RTSP atau stream berhenti.")
-        break
+        while not stop_event.is_set():
+            ret, frame = cap.read()
+            if not ret:
+                logging.error("Gagal membaca frame dari RTSP. Mencoba kembali...")
+                cap.release()
+                time.sleep(5)
+                break
+            try:
+                if not frame_queue.full():
+                    frame_queue.put(frame, block=False)
+            except queue.Full:
+                logging.warning("Queue frame penuh. Melewati frame ini.")
+                continue
 
-    # Ubah ukuran frame menjadi 854x480
-    frame = cv2.resize(frame, (854, 480))
+    cap.release()
+    logging.info("Thread pengambilan frame dihentikan.")
 
-    # Konversi frame ke grayscale untuk mendeteksi perubahan piksel
-    gray_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
 
-    # Gambar garis dan deteksi perubahan menggunakan histogram
-    for line in lines:
-        if line["end_point"]:
-            # Buat mask untuk area garis
-            mask = np.zeros_like(gray_frame)
-            cv2.line(mask, line["start_point"], line["end_point"], 255, thickness=5)
+def main_monitoring():
+    # Inisialisasi variabel global
+    global lines, polygons, line_id_counter, polygon_id_counter
+    global countdown_timers, violation_timers, finished_countdown
+    global drawing, polygon_mode, start_point, end_point, polygon_points, current_mouse_position
+    global cursor, db_connection
 
-            # Hitung histogram dari area garis
-            current_histogram = calculate_histogram(gray_frame, mask)
+    lines = []
+    polygons = []
+    line_id_counter = 1
+    polygon_id_counter = 1
 
-            # Jika histogram baseline belum disimpan, simpan sekarang
-            if line["default_histogram"] is None:
-                line["default_histogram"] = current_histogram.copy()
-                logging.info(f"Baseline histogram disimpan untuk {line['id']}.")
+    countdown_timers = {}
+    violation_timers = {}
+    finished_countdown = set()
 
-            # Bandingkan histogram saat ini dengan histogram baseline
-            if check_histogram_change(current_histogram, line["default_histogram"]):
-                line["color"] = (0, 0, 255)  # Merah jika ada perubahan
-                start_countdown(
-                    line["id"], "LINE"
-                )  # Mulai countdown saat garis berubah menjadi merah
-            else:
-                line["color"] = (0, 255, 255)  # Kuning jika tidak ada perubahan
-                if line["id"] in countdown_timers:
-                    if countdown_timers[line["id"]].get("is_in_violation"):
-                        # Violation telah berakhir
-                        handle_violation_end(
-                            line["id"], "LINE", frame, screenshot_save_path_line
-                        )
+    drawing = False
+    polygon_mode = False
+    start_point = None
+    end_point = None
+    polygon_points = []
+    current_mouse_position = (0, 0)
+
+    # Koneksi ke database
+    try:
+        db_connection = mysql.connector.connect(**db_config)
+        db_connection.autocommit = True  # Aktifkan autocommit
+        cursor = db_connection.cursor()
+        logging.info("Koneksi ke database berhasil.")
+    except mysql.connector.Error as err:
+        logging.error(f"Error koneksi database: {err}")
+        exit()
+
+    # Panggil fungsi load_data() pada startup dengan PKL pertama sesuai jadwal
+    current_pkl_file, next_switch_time, next_pkl_path = initialize_pkl_schedule(schedule)
+    load_data(current_pkl_file)  # Memuat garis dan polygon dari PKL pertama
+    update_baseline_from_pkl(current_pkl_file)  # Memuat baseline histogram dari PKL pertama
+
+    cv2.namedWindow("RTSP Stream - Monitoring")
+    cv2.setMouseCallback("RTSP Stream - Monitoring", draw)
+
+    # Setup frame queue dan thread
+    frame_queue = queue.Queue(maxsize=10)
+    stop_event = threading.Event()
+    rtsp_url = "rtsp://admin:oracle2015@10.5.0.7:554/Streaming/Channels/1"
+    frame_thread = threading.Thread(target=frame_capture_thread, args=(rtsp_url, frame_queue, stop_event))
+    frame_thread.daemon = True
+    frame_thread.start()
+
+    while True:
+        try:
+            frame = frame_queue.get(timeout=1)  # Tunggu hingga frame tersedia
+        except queue.Empty:
+            logging.warning("Queue frame kosong. Menunggu frame berikutnya...")
+            continue
+
+        try:
+            # Proses frame
+            gray_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+
+            # Gambar garis dan deteksi perubahan menggunakan histogram
+            for line in lines:
+                if line["end_point"]:
+                    # Buat mask untuk area garis
+                    mask = np.zeros_like(gray_frame)
+                    cv2.line(mask, line["start_point"], line["end_point"], 255, thickness=5)
+
+                    # Hitung histogram dari area garis
+                    current_histogram = calculate_histogram(gray_frame, mask)
+
+                    # Jika histogram baseline belum disimpan, simpan sekarang
+                    if line["default_histogram"] is None:
+                        line["default_histogram"] = current_histogram.copy()
+                        logging.info(f"Baseline histogram disimpan untuk {line['id']}.")
+
+                    # Bandingkan histogram saat ini dengan histogram baseline
+                    if check_histogram_change(current_histogram, line["default_histogram"]):
+                        line["color"] = (0, 0, 255)  # Merah jika ada perubahan
+                        start_countdown(line["id"], "LINE")  # Mulai countdown saat garis berubah menjadi merah
                     else:
-                        # Hapus countdown jika kembali normal sebelum violation
-                        del countdown_timers[line["id"]]
-                        logging.info(
-                            f"Countdown dihapus karena {line['id']} kembali normal."
-                        )
-                    if line["id"] in violation_timers:
-                        handle_violation_end(
-                            line["id"], "LINE", frame, screenshot_save_path_line
-                        )
+                        line["color"] = (0, 255, 255)  # Kuning jika tidak ada perubahan
+                        if line["id"] in countdown_timers:
+                            if countdown_timers[line["id"]].get("is_in_violation"):
+                                # Violation telah berakhir
+                                handle_violation_end(line["id"], "LINE", frame, screenshot_save_path_line)
+                            else:
+                                # Hapus countdown jika kembali normal sebelum violation
+                                del countdown_timers[line["id"]]
+                                logging.info(f"Countdown dihapus karena {line['id']} kembali normal.")
+                            if line["id"] in violation_timers:
+                                handle_violation_end(line["id"], "LINE", frame, screenshot_save_path_line)
 
-            # Gambar garis
-            cv2.line(frame, line["start_point"], line["end_point"], line["color"], 1)
+                    # Gambar garis
+                    cv2.line(frame, line["start_point"], line["end_point"], line["color"], 1)
 
-            # Tampilkan ID di tengah garis
-            mid_point = (
-                (line["start_point"][0] + line["end_point"][0]) // 2,
-                (line["start_point"][1] + line["end_point"][1]) // 2,
-            )
-            cv2.putText(
-                frame,
-                f"{line['id']}",
-                mid_point,
-                cv2.FONT_HERSHEY_SIMPLEX,
-                0.4,
-                (255, 255, 255),
-                1,
-                cv2.LINE_AA,
-            )
+                    # Tampilkan ID di tengah garis
+                    mid_point = (
+                        (line["start_point"][0] + line["end_point"][0]) // 2,
+                        (line["start_point"][1] + line["end_point"][1]) // 2,
+                    )
+                    cv2.putText(
+                        frame,
+                        f"{line['id']}",
+                        mid_point,
+                        cv2.FONT_HERSHEY_SIMPLEX,
+                        0.4,
+                        (255, 255, 255),
+                        1,
+                        cv2.LINE_AA,
+                    )
 
-    # Periksa pelanggaran pada polygon
-    check_polygon_violation(frame, gray_frame)
+            # Periksa pelanggaran pada polygon
+            check_polygon_violation(frame, gray_frame)
 
-    # Tampilkan countdown dan violation untuk mode kuning di kanan atas
-    display_countdown_and_violation(
-        frame, screenshot_save_path_line, "LINE", y_start=30
-    )
+            # Tampilkan countdown dan violation untuk mode kuning di kanan atas
+            display_countdown_and_violation(frame, screenshot_save_path_line, "LINE", y_start=30)
 
-    # Tampilkan countdown dan violation untuk mode hijau (polygon)
-    display_countdown_and_violation(
-        frame, screenshot_save_path_area, "AREA", y_start=100
-    )
+            # Tampilkan countdown dan violation untuk mode hijau (polygon)
+            display_countdown_and_violation(frame, screenshot_save_path_area, "AREA", y_start=100)
 
-    # Gambar polygon yang sedang digambar (warna hijau)
-    if polygon_mode and polygon_points:
-        for i in range(len(polygon_points) - 1):
-            cv2.line(frame, polygon_points[i], polygon_points[i + 1], (0, 255, 0), 1)
-        cv2.line(frame, polygon_points[-1], current_mouse_position, (0, 255, 0), 1)
+            # Gambar polygon yang sedang digambar (warna hijau)
+            if polygon_mode and polygon_points:
+                for i in range(len(polygon_points) - 1):
+                    cv2.line(frame, polygon_points[i], polygon_points[i + 1], (0, 255, 0), 1)
+                cv2.line(frame, polygon_points[-1], current_mouse_position, (0, 255, 0), 1)
 
-    # Gambar garis kuning sementara saat mouse sedang digerakkan
-    if not polygon_mode and drawing:
-        cv2.line(
-            frame, start_point, current_mouse_position, (0, 255, 255), 1
-        )  # Tetap menampilkan garis kuning saat ditarik
+            # Gambar garis kuning sementara saat mouse sedang digerakkan
+            if not polygon_mode and drawing:
+                cv2.line(frame, start_point, current_mouse_position, (0, 255, 255), 1)  # Tetap menampilkan garis kuning saat ditarik
 
-    # Tambahkan status mode ke layar
-    if polygon_mode:
-        cv2.putText(
-            frame,
-            "MODE: AREA",
-            (20, 460),
-            cv2.FONT_HERSHEY_SIMPLEX,
-            0.4,
-            (0, 255, 0),
-            1,
-            cv2.LINE_AA,
-        )
-    else:
-        cv2.putText(
-            frame,
-            "MODE: LINE",
-            (20, 460),
-            cv2.FONT_HERSHEY_SIMPLEX,
-            0.4,
-            (0, 255, 255),
-            1,
-            cv2.LINE_AA,
-        )
-
-    # Tampilkan hasilnya
-    cv2.imshow("RTSP Stream - Monitoring", frame)
-
-    # Cek input keyboard untuk keluar atau mengubah mode
-    key = cv2.waitKey(1) & 0xFF
-    if key == ord("q"):
-        save_data(current_pkl_file)  # Simpan data saat program akan ditutup
-        logging.info("Program dihentikan oleh pengguna. Data disimpan.")
-        break
-    elif key == ord("u"):
-        # Ubah mode antara garis kuning dan polygon (hijau)
-        if circle_color == (0, 255, 255):  # Kuning
-            circle_color = (0, 255, 0)  # Hijau
-            polygon_mode = True
-            logging.info("Mode diubah ke AREA.")
-        else:
-            circle_color = (0, 255, 255)  # Kembali ke kuning
-            polygon_mode = False
-            polygon_points.clear()  # Reset polygon points setelah selesai menggambar
-            logging.info("Mode diubah ke LINE.")
-    elif key == ord("r") and polygon_mode:
-        # Selesaikan polygon saat tombol R ditekan
-        if len(polygon_points) > 2:
-            polygon_id = f"AREA {polygon_id_counter}"
-            polygons.append(
-                {
-                    "points": polygon_points.copy(),
-                    "id": polygon_id,
-                    "default_histogram": None,
-                    "color": (0, 255, 0),
-                }
-            )
-            logging.info(
-                f"Polygon {polygon_id} ditambahkan dengan titik: {polygon_points}."
-            )
-            polygon_id_counter += 1
-        polygon_points.clear()  # Reset polygon points setelah selesai menggambar
-    elif key == ord("c"):
-        # Hapus objek terakhir
-        if polygon_mode and polygons:
-            deleted_polygon = polygons.pop()  # Hapus polygon terakhir
-            clear_data_for_deleted_object(
-                deleted_polygon["id"], frame
-            )  # Tambahkan frame
-            polygon_id_counter -= 1
-            logging.info(f"Polygon {deleted_polygon['id']} dihapus.")
-        elif not polygon_mode and lines:
-            deleted_line = lines.pop()  # Hapus garis terakhir
-            clear_data_for_deleted_object(deleted_line["id"], frame)  # Tambahkan frame
-            line_id_counter -= 1
-            logging.info(f"Garis {deleted_line['id']} dihapus.")
-
-    elif key == ord("y") or key == ord("Y"):
-        # Menambahkan default pixel (hanya default_histogram) untuk semua garis dan polygon berdasarkan frame saat ini
-        print(
-            "Menambahkan default pixel (hanya default_histogram) untuk semua garis dan polygon..."
-        )
-
-        for line in lines:
-            if line["end_point"]:
-                # Buat mask untuk area garis
-                mask = np.zeros_like(gray_frame)
-                cv2.line(mask, line["start_point"], line["end_point"], 255, thickness=5)
-
-                # Hitung histogram dari area garis
-                current_histogram = calculate_histogram(gray_frame, mask)
-
-                # Jika histogram baseline belum disimpan, buat list baru untuk menampung default_histogram
-                if line["default_histogram"] is None:
-                    line["default_histogram"] = []
-
-                # Jika default_histogram masih berupa numpy array (single histogram), ubah menjadi list
-                if isinstance(line["default_histogram"], np.ndarray):
-                    line["default_histogram"] = [line["default_histogram"]]
-
-                # Tambahkan current_histogram ke list default_histogram
-                line["default_histogram"].append(current_histogram.copy())
-                print(
-                    f"Default pixel (default_histogram) ditambahkan untuk {line['id']}"
+            # Tambahkan status mode ke layar
+            if polygon_mode:
+                cv2.putText(
+                    frame,
+                    "MODE: AREA",
+                    (20, 460),
+                    cv2.FONT_HERSHEY_SIMPLEX,
+                    0.4,
+                    (0, 255, 0),
+                    1,
+                    cv2.LINE_AA,
+                )
+            else:
+                cv2.putText(
+                    frame,
+                    "MODE: LINE",
+                    (20, 460),
+                    cv2.FONT_HERSHEY_SIMPLEX,
+                    0.4,
+                    (0, 255, 255),
+                    1,
+                    cv2.LINE_AA,
                 )
 
-        for polygon in polygons:
-            # Buat mask untuk area polygon
-            mask = np.zeros_like(gray_frame)
-            cv2.fillPoly(mask, [np.array(polygon["points"])], 255)
+            # Tampilkan hasilnya
+            cv2.imshow("RTSP Stream - Monitoring", frame)
 
-            # Hitung histogram dari area polygon
-            current_histogram = calculate_histogram(gray_frame, mask)
-
-            # Jika histogram baseline belum disimpan, buat list baru untuk menampung default_histogram
-            if polygon["default_histogram"] is None:
-                polygon["default_histogram"] = []
-
-            # Jika default_histogram masih berupa numpy array (single histogram), ubah menjadi list
-            if isinstance(polygon["default_histogram"], np.ndarray):
-                polygon["default_histogram"] = [polygon["default_histogram"]]
-
-            # Tambahkan current_histogram ke list default_histogram
-            polygon["default_histogram"].append(current_histogram.copy())
-            print(
-                f"Default pixel (default_histogram) ditambahkan untuk {polygon['id']}"
-            )
-
-        # Simpan data yang telah diperbarui (hanya default_histogram) ke file PKL yang sedang aktif
-        save_data(current_pkl_file)
-        print("Default pixel (default_histogram) telah ditambahkan dan data disimpan.")
-
-    # Penanganan Penjadwalan PKL berdasarkan waktu
-    current_datetime = datetime.now()
-    if current_datetime >= next_switch_time:
-        logging.info(
-            f"Waktu switch telah tercapai: {next_switch_time.strftime('%H:%M')}. Memuat file PKL baru: {next_pkl_path}"
-        )
-        # Memuat baseline histogram dari file PKL baru
-        update_baseline_from_pkl(next_pkl_path)
-        # Menetapkan file PKL baru sebagai yang aktif
-        current_pkl_file = next_pkl_path
-        # Menentukan switch time berikutnya
-        for idx, (hour, minute, pkl_path) in enumerate(schedule):
-            switch_time = current_datetime.replace(
-                hour=hour, minute=minute, second=0, microsecond=0
-            )
-            if current_datetime < switch_time:
-                next_switch_time = switch_time
-                next_pkl_path = pkl_path
+            # Cek input keyboard untuk keluar atau mengubah mode
+            key = cv2.waitKey(1) & 0xFF
+            if key == ord("q"):
+                save_data(current_pkl_file)  # Simpan data saat program akan ditutup
+                logging.info("Program dihentikan oleh pengguna. Data disimpan.")
                 break
-        else:
-            # Jika tidak ada switch time tersisa hari ini, set switch time pertama besok
-            first_switch = schedule[0]
-            next_switch_time = (current_datetime + timedelta(days=1)).replace(
-                hour=first_switch[0], minute=first_switch[1], second=0, microsecond=0
-            )
-            next_pkl_path = first_switch[2]
-        logging.info(
-            f"Switch berikutnya dijadwalkan pada {next_switch_time.strftime('%Y-%m-%d %H:%M')} dengan file PKL: {next_pkl_path}"
-        )
+            elif key == ord("u"):
+                # Ubah mode antara garis kuning dan polygon (hijau)
+                if polygon_mode:
+                    polygon_mode = False
+                    polygon_points.clear()  # Reset polygon points setelah selesai menggambar
+                    logging.info("Mode diubah ke LINE.")
+                else:
+                    polygon_mode = True
+                    logging.info("Mode diubah ke AREA.")
+            elif key == ord("r") and polygon_mode:
+                # Selesaikan polygon saat tombol R ditekan
+                if len(polygon_points) > 2:
+                    polygon_id = f"AREA {polygon_id_counter}"
+                    polygons.append(
+                        {
+                            "points": polygon_points.copy(),
+                            "id": polygon_id,
+                            "default_histogram": None,
+                            "color": (0, 255, 0),
+                        }
+                    )
+                    logging.info(f"Polygon {polygon_id} ditambahkan dengan titik: {polygon_points}.")
+                    polygon_id_counter += 1
+                polygon_points.clear()  # Reset polygon points setelah selesai menggambar
+            elif key == ord("c"):
+                # Hapus objek terakhir
+                if polygon_mode and polygons:
+                    deleted_polygon = polygons.pop()  # Hapus polygon terakhir
+                    clear_data_for_deleted_object(deleted_polygon["id"], frame)  # Tambahkan frame
+                    polygon_id_counter -= 1
+                    logging.info(f"Polygon {deleted_polygon['id']} dihapus.")
+                elif not polygon_mode and lines:
+                    deleted_line = lines.pop()  # Hapus garis terakhir
+                    clear_data_for_deleted_object(deleted_line["id"], frame)  # Tambahkan frame
+                    line_id_counter -= 1
+                    logging.info(f"Garis {deleted_line['id']} dihapus.")
+            elif key == ord("y") or key == ord("Y"):
+                # Menambahkan default pixel (hanya default_histogram) untuk semua garis dan polygon berdasarkan frame saat ini
+                logging.info("Menambahkan default pixel (default_histogram) untuk semua garis dan polygon...")
 
-# Rilis sumber daya dan tutup koneksi database
-cap.release()
-cv2.destroyAllWindows()
-db_connection.close()  # Tutup koneksi database
-logging.info("Sumber daya dilepaskan dan koneksi database ditutup.")
+                for line in lines:
+                    if line["end_point"]:
+                        # Buat mask untuk area garis
+                        mask = np.zeros_like(gray_frame)
+                        cv2.line(mask, line["start_point"], line["end_point"], 255, thickness=5)
+
+                        # Hitung histogram dari area garis
+                        current_histogram = calculate_histogram(gray_frame, mask)
+
+                        # Jika histogram baseline belum disimpan, buat list baru untuk menampung default_histogram
+                        if line["default_histogram"] is None:
+                            line["default_histogram"] = []
+
+                        # Jika default_histogram masih berupa numpy array (single histogram), ubah menjadi list
+                        if isinstance(line["default_histogram"], np.ndarray):
+                            line["default_histogram"] = [line["default_histogram"]]
+
+                        # Tambahkan current_histogram ke list default_histogram
+                        line["default_histogram"].append(current_histogram.copy())
+                        logging.info(f"Default pixel (default_histogram) ditambahkan untuk {line['id']}")
+
+                for polygon in polygons:
+                    # Buat mask untuk area polygon
+                    mask = np.zeros_like(gray_frame)
+                    cv2.fillPoly(mask, [np.array(polygon["points"])], 255)
+
+                    # Hitung histogram dari area polygon
+                    current_histogram = calculate_histogram(gray_frame, mask)
+
+                    # Jika histogram baseline belum disimpan, buat list baru untuk menampung default_histogram
+                    if polygon["default_histogram"] is None:
+                        polygon["default_histogram"] = []
+
+                    # Jika default_histogram masih berupa numpy array (single histogram), ubah menjadi list
+                    if isinstance(polygon["default_histogram"], np.ndarray):
+                        polygon["default_histogram"] = [polygon["default_histogram"]]
+
+                    # Tambahkan current_histogram ke list default_histogram
+                    polygon["default_histogram"].append(current_histogram.copy())
+                    logging.info(f"Default pixel (default_histogram) ditambahkan untuk {polygon['id']}")
+
+                # Simpan data yang telah diperbarui (hanya default_histogram) ke file PKL yang sedang aktif
+                save_data(current_pkl_file)
+                logging.info("Default pixel (default_histogram) telah ditambahkan dan data disimpan.")
+
+            # Penanganan Penjadwalan PKL berdasarkan waktu
+            current_datetime = datetime.now()
+            if current_datetime >= next_switch_time:
+                logging.info(f"Waktu switch telah tercapai: {next_switch_time.strftime('%H:%M')}. Memuat file PKL baru: {next_pkl_path}")
+                # Memuat baseline histogram dari file PKL baru
+                update_baseline_from_pkl(next_pkl_path)
+                # Menetapkan file PKL baru sebagai yang aktif
+                current_pkl_file = next_pkl_path
+                # Menentukan switch time berikutnya
+                for idx, (hour, minute, pkl_path) in enumerate(schedule):
+                    switch_time = current_datetime.replace(hour=hour, minute=minute, second=0, microsecond=0)
+                    if current_datetime < switch_time:
+                        next_switch_time = switch_time
+                        next_pkl_path = pkl_path
+                        break
+                else:
+                    # Jika tidak ada switch time tersisa hari ini, set switch time pertama besok
+                    first_switch = schedule[0]
+                    next_switch_time = (current_datetime + timedelta(days=1)).replace(hour=first_switch[0], minute=first_switch[1], second=0, microsecond=0)
+                    next_pkl_path = first_switch[2]
+                logging.info(f"Switch berikutnya dijadwalkan pada {next_switch_time.strftime('%Y-%m-%d %H:%M')} dengan file PKL: {next_pkl_path}")
+
+        except Exception as e:
+            logging.error(f"Error dalam memproses frame: {e}")
+
+    # Setelah loop utama berakhir, lakukan cleanup
+    stop_event.set()
+    frame_thread.join()
+    save_data(current_pkl_file)
+    logging.info("Sumber daya dilepaskan dan koneksi database ditutup.")
+    cursor.close()
+    db_connection.close()
+    cv2.destroyAllWindows()
+
+
+if __name__ == "__main__":
+    main_monitoring()
