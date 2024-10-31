@@ -2,37 +2,25 @@ from ALKBR import run_broom
 from ALGFR import run_carpal
 import multiprocessing
 
+
+def start_processes(target_func, cameras, args, size):
+    processes = []
+    for camera in cameras:
+        p = multiprocessing.Process(target=target_func, args=(*args, camera, size))
+        processes.append(p)
+        p.start()
+    return processes
+
+
 if __name__ == "__main__":
-    size = (480, 320)
-    list_cameras = ["OFFICE1", "OFFICE2", "OFFICE3"]
-    # broom
-    broom1_process = multiprocessing.Process(target=run_broom, args=(10, 0, 50, list_cameras[0], size))
-    broom2_process = multiprocessing.Process(target=run_broom, args=(10, 0, 50, list_cameras[1], size))
-    broom3_process = multiprocessing.Process(target=run_broom, args=(10, 0, 50, list_cameras[2], size))
+    broom_list_cameras = ["OFFICE1", "OFFICE2", "OFFICE3"]
+    carpal_list_cameras = ["OFFICE1", "OFFICE2", "OFFICE3"]
+    
+    broom_args = (30, 0.005, 80)
+    carpal_args = (30, 0.005, 80)
 
-    # carpal
-    carpal1_process = multiprocessing.Process(target=run_carpal, args=(10, 0, 50, list_cameras[0], size))
-    carpal2_process = multiprocessing.Process(target=run_carpal, args=(10, 0, 50, list_cameras[1], size))
-    carpal3_process = multiprocessing.Process(target=run_carpal, args=(10, 0, 50, list_cameras[2], size))
+    broom_processes = start_processes(run_broom, broom_list_cameras, broom_args, size=(480, 320))
+    carpal_processes = start_processes(run_carpal, carpal_list_cameras, carpal_args, size=(480, 320))
 
-    # start broom
-    broom1_process.start()
-    broom2_process.start()
-    broom3_process.start()
-
-
-    # start carpal
-    carpal1_process.start()
-    carpal2_process.start()
-    carpal3_process.start()
-
-    # join broom
-    broom1_process.join()
-    broom2_process.join()
-    broom3_process.join()
-
-
-    # join carpal
-    carpal1_process.join()
-    carpal2_process.join()
-    carpal3_process.join()
+    for p in broom_processes + carpal_processes:
+        p.join()
