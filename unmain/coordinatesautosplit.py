@@ -1,7 +1,7 @@
 import cv2
 import math
 from shapely.geometry import Polygon, LineString, Point
-from shapely.ops import split
+from shapely.ops import triangulate
 import numpy as np
 
 # RTSP stream URL atau path video lokal
@@ -19,6 +19,9 @@ magnet_threshold = 10
 # Desired display resolution
 display_width = 1280
 display_height = 720
+
+# Variable to store current number of subdivisions
+current_polygon_subdivisions = 4  # Default to 4
 
 
 # Function to calculate the distance between two points
@@ -44,7 +47,7 @@ def find_nearest_point(preview_point):
 
 # Mouse callback function to create keypoints and draw connecting lines
 def create_keypoint(event, x, y, flags, param):
-    global chains, frame, dragging, preview_point, current_polygon
+    global chains, frame, dragging, preview_point, current_polygon, current_polygon_subdivisions
 
     if event == cv2.EVENT_LBUTTONDOWN:
         dragging = True
@@ -138,11 +141,10 @@ def undo_last_point():
 
 # Function to redraw the frame (without needing to capture a new frame)
 def redraw_frame():
-    global frame, original_frame, current_polygon
+    global frame, original_frame, current_polygon, current_polygon_subdivisions
     frame = original_frame.copy()
     draw_chains(frame)
     if current_polygon:
-        current_polygon_subdivisions = get_subdivision_input()
         subdivide_polygon_grid(current_polygon, img=frame, n_subdivisions=current_polygon_subdivisions)
     cv2.imshow("Video", frame)
 
@@ -161,7 +163,7 @@ def print_chains():
 
 # Function to print the borders at the end of the program
 def print_borders():
-    borders = [[(p[0], p[1]) for p in chain] for chain in chains if len(chain) > 0]
+    borders = [[(int(p[0]), int(p[1])) for p in chain] for chain in chains if len(chain) > 0]
     print(f"borders = {borders}")
 
 
@@ -190,8 +192,7 @@ def get_subdivision_input():
 # Function to subdivide quadrilateral into grid-based subdivisions
 def subdivide_polygon_grid(polygon, img, n_subdivisions=4):
     """
-    Subdivide the quadrilateral polygon into n_subdivisions parts with approximately equal area.
-    Uses grid-based splitting.
+    Subdivide the quadrilateral polygon into n_subdivisions parts with grid-based subdivision.
 
     :param polygon: Shapely Polygon object (quadrilateral)
     :param img: OpenCV image to draw the subdivisions
@@ -202,7 +203,8 @@ def subdivide_polygon_grid(polygon, img, n_subdivisions=4):
         return
 
     # Check if polygon is quadrilateral
-    if len(polygon.exterior.coords) - 1 != 4:
+    coords = list(polygon.exterior.coords)[:-1]  # Remove the duplicate first/last point
+    if len(coords) != 4:
         print("Poligon bukan quadrilateral. Tidak dapat dibagi menjadi grid.")
         return
 
@@ -214,7 +216,6 @@ def subdivide_polygon_grid(polygon, img, n_subdivisions=4):
 
     grid_rows = grid_cols = int(sqrt_n)
 
-    coords = list(polygon.exterior.coords)[:-1]  # Remove the duplicate first/last point
     A, B, C, D = coords
 
     # Function to compute equally spaced points along a side
@@ -237,7 +238,7 @@ def subdivide_polygon_grid(polygon, img, n_subdivisions=4):
     right_div = compute_division_points(B, C, grid_rows)
 
     # Now, for each row and column, interpolate points to define grid cells
-    # Compute intermediate points between top and bottom division points for each column
+    # Compute intermediate points between top_div and bottom_div for each column
     grid_points = []
     for row in range(grid_rows + 1):
         t = row / grid_rows
@@ -248,7 +249,7 @@ def subdivide_polygon_grid(polygon, img, n_subdivisions=4):
             row_points.append(p)
         grid_points.append(row_points)
 
-    # Now, define sub-polygons based on grid_points
+    # Now, define sub-polygons
     borders = []
     for row in range(grid_rows):
         for col in range(grid_cols):
@@ -271,10 +272,15 @@ def subdivide_polygon_grid(polygon, img, n_subdivisions=4):
         color = colors[idx % len(colors)]
         cv2.fillPoly(img, [pts], color)
         cv2.polylines(img, [pts], True, (0, 0, 0), 2)
+        # Calculate and print area
         sub_polygon = Polygon(border)
         print(f"Area {idx + 1}: {sub_polygon.area}")
 
+    # Update the image with subdivisions
     cv2.imshow("Video", img)
+
+    # Update the borders variable to include all sub-polygons
+    print(f"borders = {borders}")
 
 
 # Open the video stream
