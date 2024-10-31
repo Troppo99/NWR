@@ -1,26 +1,37 @@
 import cv2
 import math
-from shapely.geometry import Polygon, LineString
+from shapely.geometry import Polygon, LineString, Point
 from shapely.ops import split
 import numpy as np
 
+# RTSP stream URL atau path video lokal
 video_path = "rtsp://admin:oracle2015@10.5.0.170:554/Streaming/Channels/1"
-chains = []
+
+# Initialize variables for storing keypoints
+chains = []  # List to store all chains of keypoints
 dragging = False
 preview_point = None
-current_polygon = None
+current_polygon = None  # To store the completed polygon
+
+# Magnet threshold distance (in pixels)
 magnet_threshold = 10
+
+# Desired display resolution
 display_width = 1280
 display_height = 720
 
 
+# Function to calculate the distance between two points
 def distance(point1, point2):
     return math.sqrt((point1[0] - point2[0]) ** 2 + (point1[1] - point2[1]) ** 2)
 
 
+# Function to find the nearest point to the preview_point within the magnet threshold
 def find_nearest_point(preview_point):
     nearest_point = None
     min_distance = float("inf")
+
+    # Search in all chains (previous points)
     for chain in chains:
         for point in chain:
             dist = distance(preview_point, point)
@@ -31,6 +42,7 @@ def find_nearest_point(preview_point):
     return nearest_point
 
 
+# Mouse callback function to create keypoints and draw connecting lines
 def create_keypoint(event, x, y, flags, param):
     global chains, frame, dragging, preview_point, current_polygon
 
@@ -45,8 +57,11 @@ def create_keypoint(event, x, y, flags, param):
             if nearest_point is not None:
                 preview_point = nearest_point
 
+            # Create a copy of the frame to show the preview
             frame_copy = frame.copy()
+            # Draw all existing chains
             draw_chains(frame_copy)
+            # Draw the preview line and point
             if len(chains) > 0 and len(chains[-1]) > 0:
                 cv2.line(frame_copy, chains[-1][-1], preview_point, (255, 0, 0), 2)
             cv2.circle(frame_copy, preview_point, 5, (0, 255, 0), -1)
@@ -67,14 +82,17 @@ def create_keypoint(event, x, y, flags, param):
             cv2.circle(frame, chains[-1][-1], 5, (0, 255, 0), -1)
             cv2.imshow("Video", frame)
 
+            # Check if the last point is near the first point to close the polygon
             if len(chains[-1]) >= 4:
                 first_point = chains[-1][0]
                 last_point = chains[-1][-1]
                 if distance(first_point, last_point) < magnet_threshold:
-                    chains[-1][-1] = first_point
-                    cv2.line(frame, last_point, first_point, (0, 0, 255), 2)
+                    # Close the polygon
+                    chains[-1][-1] = first_point  # Ensure it's exactly the first point
+                    cv2.line(frame, last_point, first_point, (0, 0, 255), 2)  # Red line to indicate closure
                     cv2.imshow("Video", frame)
 
+                    # Create a Shapely polygon
                     polygon_points = chains[-1]
                     polygon = Polygon(polygon_points)
                     if polygon.is_valid and polygon.area > 0:
@@ -82,21 +100,29 @@ def create_keypoint(event, x, y, flags, param):
                         print(f"Poligon selesai: {polygon_points}")
                         print_borders()
 
-                        subdivide_polygon(polygon, frame)
+                        # Ask user for number of subdivisions
+                        n = get_subdivision_input()
+                        if n:
+                            subdivide_polygon_grid(polygon, img=frame, n_subdivisions=n)
                     else:
                         print("Poligon tidak valid atau area nol.")
-                        chains.pop()
+                        chains.pop()  # Remove the invalid polygon
 
 
+# Function to draw all chains
 def draw_chains(img):
+    # Draw all chains
     for chain in chains:
         if len(chain) > 0:
+            # Draw lines
             for i in range(1, len(chain)):
                 cv2.line(img, chain[i - 1], chain[i], (255, 0, 0), 2)
+            # Draw circles at keypoints
             for point in chain:
                 cv2.circle(img, point, 5, (0, 255, 0), -1)
 
 
+# Function to undo the last point from the current chain or from the previous chains
 def undo_last_point():
     global chains, current_polygon
     if len(chains) > 0:
@@ -110,84 +136,140 @@ def undo_last_point():
             current_polygon = None
 
 
+# Function to redraw the frame (without needing to capture a new frame)
 def redraw_frame():
     global frame, original_frame, current_polygon
     frame = original_frame.copy()
     draw_chains(frame)
     if current_polygon:
-        subdivide_polygon(current_polygon, frame)
+        current_polygon_subdivisions = get_subdivision_input()
+        subdivide_polygon_grid(current_polygon, img=frame, n_subdivisions=current_polygon_subdivisions)
     cv2.imshow("Video", frame)
 
 
+# Function to print all chains and their points
 def print_chains():
     print("\nChains and Points:")
-    non_empty_chain_count = 0
+    non_empty_chain_count = 0  # Variable to count non-empty chains
     for idx, chain in enumerate(chains):
-        if len(chain) > 0:
+        if len(chain) > 0:  # Only count and print non-empty chains
             non_empty_chain_count += 1
-            print(f"Chain {non_empty_chain_count}:")
+            print(f"Chain {non_empty_chain_count}:")  # Print non-empty chain number
             for i, point in enumerate(chain):
                 print(f"  Point {i + 1}: ({point[0]}, {point[1]})")
 
 
+# Function to print the borders at the end of the program
 def print_borders():
     borders = [[(p[0], p[1]) for p in chain] for chain in chains if len(chain) > 0]
     print(f"borders = {borders}")
 
 
-def subdivide_polygon(polygon, img):
-    if polygon.area < 4:
-        print("Area poligon terlalu kecil untuk dibagi.")
+# Function to get user input for number of subdivisions
+def get_subdivision_input():
+    """
+    Function to get user input for number of subdivisions.
+    For simplicity, using console input.
+    """
+    try:
+        n = int(input("Masukkan jumlah pembagian (misal 4, 9, 16): "))
+        if n < 1:
+            print("Jumlah pembagian harus minimal 1.")
+            return None
+        # Check if n is a perfect square
+        sqrt_n = math.sqrt(n)
+        if not sqrt_n.is_integer():
+            print("Jumlah pembagian harus merupakan bilangan kuadrat sempurna (misal 4, 9, 16).")
+            return None
+        return n
+    except ValueError:
+        print("Input tidak valid. Silakan masukkan angka integer.")
+        return None
+
+
+# Function to subdivide quadrilateral into grid-based subdivisions
+def subdivide_polygon_grid(polygon, img, n_subdivisions=4):
+    """
+    Subdivide the quadrilateral polygon into n_subdivisions parts with approximately equal area.
+    Uses grid-based splitting.
+
+    :param polygon: Shapely Polygon object (quadrilateral)
+    :param img: OpenCV image to draw the subdivisions
+    :param n_subdivisions: Number of desired subdivisions (must be a perfect square)
+    """
+    if polygon.area < n_subdivisions:
+        print(f"Area poligon terlalu kecil untuk dibagi menjadi {n_subdivisions} bagian.")
         return
 
+    # Check if polygon is quadrilateral
     if len(polygon.exterior.coords) - 1 != 4:
-        print("Poligon bukan quadrilateral. Tidak dapat dibagi menjadi empat area.")
+        print("Poligon bukan quadrilateral. Tidak dapat dibagi menjadi grid.")
         return
 
-    coords = list(polygon.exterior.coords)[:-1]
+    # Check if n_subdivisions is a perfect square
+    sqrt_n = math.sqrt(n_subdivisions)
+    if not sqrt_n.is_integer():
+        print("Jumlah pembagian harus merupakan bilangan kuadrat sempurna (misal 4, 9, 16).")
+        return
 
+    grid_rows = grid_cols = int(sqrt_n)
+
+    coords = list(polygon.exterior.coords)[:-1]  # Remove the duplicate first/last point
     A, B, C, D = coords
 
-    def midpoint(p1, p2):
-        return ((p1[0] + p2[0]) / 2, (p1[1] + p2[1]) / 2)
+    # Function to compute equally spaced points along a side
+    def compute_division_points(p1, p2, divisions):
+        points = []
+        for i in range(divisions + 1):
+            t = i / divisions
+            point = interpolate(p1, p2, t)
+            points.append(point)
+        return points
 
-    AB_mid = midpoint(A, B)
-    BC_mid = midpoint(B, C)
-    CD_mid = midpoint(C, D)
-    DA_mid = midpoint(D, A)
+    # Function to interpolate between two points
+    def interpolate(p1, p2, t):
+        return (p1[0] + (p2[0] - p1[0]) * t, p1[1] + (p2[1] - p1[1]) * t)
 
-    def line_intersection(p1, p2, p3, p4):
-        x1, y1 = p1
-        x2, y2 = p2
-        x3, y3 = p3
-        x4, y4 = p4
+    # Compute division points on each side
+    top_div = compute_division_points(A, B, grid_cols)
+    bottom_div = compute_division_points(D, C, grid_cols)
+    left_div = compute_division_points(A, D, grid_rows)
+    right_div = compute_division_points(B, C, grid_rows)
 
-        denom = (x1 - x2) * (y3 - y4) - (y1 - y2) * (x3 - x4)
-        if denom == 0:
-            return None
+    # Now, for each row and column, interpolate points to define grid cells
+    # Compute intermediate points between top and bottom division points for each column
+    grid_points = []
+    for row in range(grid_rows + 1):
+        t = row / grid_rows
+        row_points = []
+        for col in range(grid_cols + 1):
+            # Interpolate between top_div[col] and bottom_div[col] based on t
+            p = interpolate(top_div[col], bottom_div[col], t)
+            row_points.append(p)
+        grid_points.append(row_points)
 
-        Px = ((x1 * y2 - y1 * x2) * (x3 - x4) - (x1 - x2) * (x3 * y4 - y3 * x4)) / denom
-        Py = ((x1 * y2 - y1 * x2) * (y3 - y4) - (y1 - y2) * (x3 * y4 - y3 * x4)) / denom
-        return (int(Px), int(Py))
+    # Now, define sub-polygons based on grid_points
+    borders = []
+    for row in range(grid_rows):
+        for col in range(grid_cols):
+            top_left = grid_points[row][col]
+            top_right = grid_points[row][col + 1]
+            bottom_right = grid_points[row + 1][col + 1]
+            bottom_left = grid_points[row + 1][col]
+            sub_border = [top_left, top_right, bottom_right, bottom_left]
+            borders.append(sub_border)
 
-    intersection = line_intersection(AB_mid, CD_mid, BC_mid, DA_mid)
-    if intersection is None:
-        print("Tidak dapat menemukan titik potong. Poligon mungkin tidak simetris.")
-        return
-
-    border1 = [A, AB_mid, intersection, DA_mid]
-    border2 = [AB_mid, B, BC_mid, intersection]
-    border3 = [intersection, BC_mid, C, CD_mid]
-    border4 = [DA_mid, intersection, CD_mid, D]
-
-    borders = [border1, border2, border3, border4]
+    # Print borders
     print(f"borders = {borders}")
 
-    colors = [(255, 0, 0), (0, 255, 0), (0, 0, 255), (255, 255, 0)]
+    # Draw sub-polygons with different colors
+    colors = [(255, 0, 0), (0, 255, 0), (0, 0, 255), (255, 255, 0), (255, 0, 255), (0, 255, 255), (128, 0, 128), (0, 128, 128), (128, 128, 0), (0, 0, 128)]  # Red  # Green  # Blue  # Cyan  # Magenta  # Yellow  # Purple  # Teal  # Olive  # Navy
+
     for idx, border in enumerate(borders):
         pts = np.array(border, np.int32)
         pts = pts.reshape((-1, 1, 2))
-        cv2.fillPoly(img, [pts], colors[idx % len(colors)])
+        color = colors[idx % len(colors)]
+        cv2.fillPoly(img, [pts], color)
         cv2.polylines(img, [pts], True, (0, 0, 0), 2)
         sub_polygon = Polygon(border)
         print(f"Area {idx + 1}: {sub_polygon.area}")
@@ -195,15 +277,19 @@ def subdivide_polygon(polygon, img):
     cv2.imshow("Video", img)
 
 
+# Open the video stream
 cap = cv2.VideoCapture(video_path)
 
+# Check if the video stream is opened successfully
 if not cap.isOpened():
     print("Error: Could not open video stream.")
     exit()
 
+# Create a window and set the mouse callback function
 cv2.namedWindow("Video")
 cv2.setMouseCallback("Video", create_keypoint)
 
+# Read the first frame to use as the base for redrawing
 ret, frame = cap.read()
 if not ret:
     print("Failed to grab frame")
@@ -222,13 +308,17 @@ while True:
             print("Failed to grab frame after reconnecting")
             break
 
+    # Resize the frame to desired resolution
     frame = cv2.resize(frame, (display_width, display_height))
     original_frame = frame.copy()
 
+    # Draw all the chains on the frame
     draw_chains(frame)
 
+    # If dragging, update the preview
     if dragging and preview_point is not None:
         frame_copy = frame.copy()
+        # Draw the preview line and point
         if len(chains) > 0 and len(chains[-1]) > 0:
             cv2.line(frame_copy, chains[-1][-1], preview_point, (255, 0, 0), 2)
         cv2.circle(frame_copy, preview_point, 5, (0, 255, 0), -1)
@@ -236,20 +326,22 @@ while True:
     else:
         cv2.imshow("Video", frame)
 
-    key = cv2.waitKey(1) & 0xFF
-    if key == ord("n"):
-        print_borders()
+    key = cv2.waitKey(1) & 0xFF  # Change waitKey to 1 for real-time display
+    if key == ord("n"):  # Press 'n' to exit the program
+        print_borders()  # Print the final borders in the required format
         break
-    elif key == 13:
+    elif key == 13:  # Press 'Enter' to save current chain and start a new chain
+        # Only append a new chain if the last one has points
         if len(chains) > 0 and len(chains[-1]) > 0:
-            print_chains()
-            chains.append([])
-    elif key == ord("a"):
+            print_chains()  # Print the chains and points
+            chains.append([])  # Start a new chain
+    elif key == ord("a"):  # Press 'a' to delete all points
         chains = []
         current_polygon = None
         redraw_frame()
-    elif key == ord("f"):
+    elif key == ord("f"):  # Press 'f' to undo the last point
         undo_last_point()
 
+# Release the video capture object and close display windows
 cap.release()
 cv2.destroyAllWindows()
