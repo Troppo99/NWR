@@ -11,6 +11,7 @@ import queue
 import math
 import numpy as np
 from shapely.geometry import Polygon, box
+from shapely.ops import unary_union  # Tambahkan ini
 
 
 class BroomDetector:
@@ -127,7 +128,6 @@ class BroomDetector:
 
     def export_frame(self, results, current_time):
         boxes_info = []
-        self.total_area = 0
         for result in results:
             for box in result.boxes:
                 x1, y1, x2, y2 = map(int, box.xyxy[0])
@@ -142,14 +142,10 @@ class BroomDetector:
                                 if intersection.geom_type == "Polygon":
                                     boxes_info.append((intersection, current_time))
                                     self.active_bboxes.append((intersection, current_time))
-                                    area = intersection.area
-                                    self.total_area += area
                                 elif intersection.geom_type == "MultiPolygon":
                                     for poly in intersection.geoms:
                                         boxes_info.append((poly, current_time))
                                         self.active_bboxes.append((poly, current_time))
-                                        area = poly.area
-                                        self.total_area += area
         return boxes_info
 
     def draw_segments(self, frame, current_time):
@@ -167,6 +163,13 @@ class BroomDetector:
                         cv2.fillPoly(overlay, [coords], (0, 255, 0))
             else:
                 self.active_bboxes.remove((intersection_polygon, start_time))
+        if self.active_bboxes:
+            polygons = [poly for poly, _ in self.active_bboxes]
+            union_polygon = unary_union(polygons)
+            self.total_area = union_polygon.area
+        else:
+            self.total_area = 0
+
         cv2.addWeighted(overlay, 0.5, frame, 0.5, 0, frame)
 
     def draw_borders(self, frame):
