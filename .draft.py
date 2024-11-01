@@ -112,8 +112,8 @@ class BroomDetector:
         boxes_info = self.export_frame(results, current_time)
         if boxes_info:
             for x1, y1, x2, y2, conf, class_id in boxes_info:
-                cvzone.putTextRect(frame_resized, f"{class_id} {conf:.2f}", (x1, y1 - 15), scale=1, thickness=2, offset=5, colorR=(0, 255, 255), colorT=(0, 0, 0))
                 cvzone.cornerRect(frame_resized, (x1, y1, x2 - x1, y2 - y1), l=10, t=2, colorR=(0, 255, 255), colorC=(255, 255, 255))
+                cvzone.putTextRect(frame_resized, f"{class_id} {conf:.2f}", (x1, y1 + 6), scale=0.5, thickness=1, offset=0, colorR=(0, 255, 255), colorT=(0, 0, 0))
         self.draw_segments(frame_resized, current_time)
         return frame_resized
 
@@ -152,13 +152,13 @@ class BroomDetector:
                     break
 
 
-def run_broom():
+def run_broom(window_size=(540, 360)):
     detector = BroomDetector(
         rtsp_url="D:/NWR/videos/test/broom_test_0002.mp4",
-        window_size=(540, 360),
+        window_size=window_size,
     )
     detector.main()
 
 
 if __name__ == "__main__":
-    run_broom()
+    run_broom(window_size=(960, 540))
