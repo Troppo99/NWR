@@ -2,41 +2,148 @@ import os
 
 os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
 import cv2
-import cvzone
 from ultralytics import YOLO
+import torch
+import cvzone
+import time
+import threading
+import queue
+import math
+
+class BroomDetector:
+
+    def __init__(
+        self,
+        rtsp_url=None,
+        window_size=(540, 360),
+        new_size=(960, 540),
+    ):
+        self.window_width, self.window_height = window_size
+        self.new_width, self.new_height = new_size
+        self.prev_frame_time = 0
+        self.fps = 0
+        if rtsp_url is not None:
+            self.rtsp_url = rtsp_url
+            if os.path.isfile(rtsp_url):
+                self.is_local_file = True
+                cap = cv2.VideoCapture(self.rtsp_url)
+                self.video_fps = cap.get(cv2.CAP_PROP_FPS)
+                if not self.video_fps or math.isnan(self.video_fps):
+                    self.video_fps = 25  # Default FPS if unable to get
+                cap.release()
+                print(f"Local video file detected. FPS: {self.video_fps}")
+            else:
+                self.is_local_file = False
+                print(f"RTSP stream detected. URL: {self.rtsp_url}")
+                self.video_fps = None
+        else:
+            self.rtsp_url = f"rtsp://admin:oracle2015@{self.ip_camera}:554/Streaming/Channels/1"
+            self.video_fps = None
+            self.is_local_file = False
+
+        self.frame_queue = queue.Queue(maxsize=10)
+        self.stop_event = threading.Event()
+        self.frame_thread = None
+
+        self.broom_model = YOLO("broom6l.pt").to("cuda")
+        self.broom_model.overrides["verbose"] = False
+        print(f"Model Broom device: {next(self.broom_model.model.parameters()).device}")
+
+    def camera_config(self):
+        pass        
+
+    def frame_capture(self):
+        rtsp_url = self.rtsp_url
+        while not self.stop_event.is_set():
+            cap = cv2.VideoCapture(rtsp_url)
+            if not cap.isOpened():
+                print("Failed to open stream. Retrying in 5 seconds...")
+                cap.release()
+                time.sleep(5)
+                continue
+
+            while not self.stop_event.is_set():
+                ret, frame = cap.read()
+                if not ret:
+                    print("Failed to read frame. Reconnecting in 5 seconds...")
+                    cap.release()
+                    time.sleep(5)
+                    break
+                try:
+                    self.frame_queue.put(frame, timeout=1)
+                except queue.Full:
+                    pass
+            cap.release()
+
+    def process_model(self, frame):
+        with torch.no_grad():
+            results = self.broom_model(frame)
+        return results
+
+    def export_frame(self, results):
+        boxes_info = []
+        for result in results:
+            for box in result.boxes:
+                x1, y1, x2, y2 = map(int, box.xyxy[0])
+                conf = box.conf[0]
+                class_id = self.broom_model.names[int(box.cls[0])]
+                if conf > 0.5:
+                    boxes_info.append((x1, y1, x2, y2, conf, class_id))
+        return boxes_info
+
+    def process_frame(self, frame, current_time):
+        frame_resized = cv2.resize(frame, (self.new_width, self.new_height))
+        results = self.process_model(frame_resized)
+        boxes_info = self.export_frame(results)
+        if boxes_info:
+            for x1, y1, x2, y2, conf, class_id in boxes_info:
+                cvzone.cornerRect(frame_resized, (x1, y1, x2 - x1, y2 - y1), l=10, t=2, colorR=(0, 255, 255), colorC=(255, 255, 255))
+
+        return frame_resized
+    def main(self):
+        process_every_n_frames = 2
+        frame_count = 0
+
+        window_name = f"Broom Detection"
+        cv2.namedWindow(window_name, cv2.WINDOW_NORMAL)
+        cv2.resizeWindow(window_name, self.window_width, self.window_height)
+
+        if self.video_fps is not None:
+            cap = cv2.VideoCapture(self.rtsp_url)
+            frame_delay = int(1000 / self.video_fps)  # Delay in milliseconds
+
+            while cap.isOpened():
+                start_time = time.time()
+                ret, frame = cap.read()
+                if not ret:
+                    break
+                frame_count += 1
+                if frame_count % process_every_n_frames != 0:
+                    continue
+                current_time = time.time()
+                time_diff = current_time - self.prev_frame_time
+                if time_diff > 0:
+                    self.fps = 1 / time_diff
+                else:
+                    self.fps = 0
+                self.prev_frame_time = current_time
+                frame_resized = self.process_frame(frame, current_time)
+
+                cvzone.putTextRect(frame_resized, f"FPS: {int(self.fps)}", (10, 75), scale=1, thickness=2, offset=5)
+                cv2.imshow(window_name, frame_resized)
+                processing_time = (time.time() - start_time) * 1000
+                adjusted_delay = max(int(frame_delay - processing_time), 1)
+                key = cv2.waitKey(adjusted_delay) & 0xFF
+                if key == ord("n"):
+                    break
+
+def run_broom():
+    detector = BroomDetector(
+        rtsp_url="D:/NWR/videos/test/broom_test_0002.mp4",
+        window_size=(540, 360),
+    )
+    detector.main()
 
 
-def export_frame(frame):
-    results = model(frame)
-    boxes_info = []
-    for result in results:
-        for box in result.boxes:
-            x1, y1, x2, y2 = map(int, box.xyxy[0])
-            conf = box.conf[0]
-            class_id = model.names[int(box.cls[0])]
-            if conf > 0.5:
-                boxes_info.append((x1, y1, x2, y2, conf, class_id))
-    return frame, boxes_info
-
-
-cap = cv2.VideoCapture("D:/NWR/videos/test/broom_test_0002.mp4")
-model = YOLO("broom6l.pt")
-model.overrides["verbose"] = False
-
-while True:
-    ret, frame = cap.read()
-    if not ret:
-        break
-
-    frame_results, boxes_info = export_frame(frame)
-    for x1, y1, x2, y2, conf, class_id in boxes_info:
-        cvzone.cornerRect(frame_results, (x1, y1, x2 - x1, y2 - y1), rt=0, colorC=(0, 255, 255))
-        cvzone.putTextRect(frame_results, f"{class_id} {conf}", (x1, y1 - 15))
-
-    frame_show = cv2.resize(frame_results, (540, 360))
-    cv2.imshow(f"Broom Detection", frame_show)
-    key = cv2.waitKey(1) & 0xFF
-    if key == ord("n"):
-        break
-cap.release()
-cv2.destroyAllWindows()
+if __name__ == "__main__":
+    run_broom()
