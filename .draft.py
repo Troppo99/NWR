@@ -18,12 +18,11 @@ class BroomDetector:
         rtsp_url=None,
         camera_name=None,
         window_size=(540, 360),
-        new_size=(960, 540),
         bbox_duration=5,
     ):
         self.BROOM_CONFIDENCE_THRESHOLD = BROOM_CONFIDENCE_THRESHOLD
         self.window_width, self.window_height = window_size
-        self.new_width, self.new_height = new_size
+        self.new_width, self.new_height = (960, 540)
         self.prev_frame_time = 0
         self.fps = 0
         self.bbox_duration = bbox_duration
@@ -73,6 +72,7 @@ class BroomDetector:
                 "ip": "10.5.0.161",
             },
         }
+        """buatkan kode disini untuk mengonversi borders ke size 960x540 karena border ini diambil dari ukuran 1280x720, border akhir harus bilangan bulat"""
         borders = config[self.camera_name]["borders"]
         ip = config[self.camera_name]["ip"]
         return borders, ip
@@ -102,7 +102,7 @@ class BroomDetector:
 
     def process_model(self, frame):
         with torch.no_grad():
-            results = self.broom_model(frame)
+            results = self.broom_model(frame, stream=True, imgsz=960)
         return results
 
     def export_frame(self, results, current_time):
