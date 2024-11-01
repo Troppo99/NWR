@@ -130,6 +130,11 @@ class BroomDetector:
         for result in results:
             for box in result.boxes:
                 x1, y1, x2, y2 = map(int, box.xyxy[0])
+                dp = 0.2
+                x1 = x1-dp*(x2-x1)
+                y1 = y1-dp*(y2-y1)
+                x2 = x2+dp*(x2-x1)
+                y2 = y2+dp*(y2-y1)
                 conf = box.conf[0]
                 class_id = self.broom_model.names[int(box.cls[0])]
                 if conf > self.BROOM_CONFIDENCE_THRESHOLD:
