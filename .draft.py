@@ -21,14 +21,12 @@ class BroomDetector:
         rtsp_url=None,
         camera_name=None,
         window_size=(540, 360),
-        bbox_duration=5,
     ):
         self.BROOM_CONFIDENCE_THRESHOLD = BROOM_CONFIDENCE_THRESHOLD
         self.window_width, self.window_height = window_size
         self.new_width, self.new_height = (960, 540)
         self.prev_frame_time = 0
         self.fps = 0
-        self.bbox_duration = bbox_duration
         self.active_bboxes = []
         self.total_area = 0
         self.camera_name = camera_name
@@ -152,18 +150,15 @@ class BroomDetector:
     def draw_segments(self, frame, current_time):
         overlay = frame.copy()
         for intersection_polygon, start_time in self.active_bboxes[:]:
-            if current_time - start_time < self.bbox_duration:
-                if intersection_polygon.geom_type == "Polygon":
-                    coords = np.array(intersection_polygon.exterior.coords, np.int32)
+            if intersection_polygon.geom_type == "Polygon":
+                coords = np.array(intersection_polygon.exterior.coords, np.int32)
+                coords = coords.reshape((-1, 1, 2))
+                cv2.fillPoly(overlay, [coords], (0, 255, 0))
+            elif intersection_polygon.geom_type == "MultiPolygon":
+                for poly in intersection_polygon.geoms:
+                    coords = np.array(poly.exterior.coords, np.int32)
                     coords = coords.reshape((-1, 1, 2))
                     cv2.fillPoly(overlay, [coords], (0, 255, 0))
-                elif intersection_polygon.geom_type == "MultiPolygon":
-                    for poly in intersection_polygon.geoms:
-                        coords = np.array(poly.exterior.coords, np.int32)
-                        coords = coords.reshape((-1, 1, 2))
-                        cv2.fillPoly(overlay, [coords], (0, 255, 0))
-            else:
-                self.active_bboxes.remove((intersection_polygon, start_time))
         if self.active_bboxes:
             polygons = [poly for poly, _ in self.active_bboxes]
             union_polygon = unary_union(polygons)
