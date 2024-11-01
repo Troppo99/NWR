@@ -10,3 +10,4 @@ main/logs/*
 *.pyc
 broom5l_11.pt
 datasets/*
+images/*

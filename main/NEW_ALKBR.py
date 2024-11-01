@@ -13,6 +13,8 @@ import numpy as np
 from shapely.geometry import Polygon, box
 from shapely.ops import unary_union
 from shapely.geometry import JOIN_STYLE
+import pymysql
+from datetime import datetime, timedelta
 
 
 class BroomDetector:
@@ -268,13 +270,15 @@ class BroomDetector:
         minx, miny, maxx, maxy = polygon.bounds
         return int(minx), int(miny), int(maxx - minx), int(maxy - miny)
 
-    def check_conditions(self, percentage, overlap_detected, current_time):
+    def check_conditions(self, percentage, overlap_detected, current_time, frame_resized):
         # New condition: If percentage >= 90%, reset immediately and pause detection
         if percentage >= 90:
             # Reset polygons and print message
             self.union_polygon = None
             self.total_area = 0
             print("AREA DIBERSIHKAN - Percentage >= 90%")
+            # Capture frame and send data
+            self.capture_and_send(frame_resized, percentage, current_time)
             # Pause detection for 10 seconds
             self.detection_paused = True
             self.detection_resume_time = current_time + 10  # 10-second pause
@@ -293,6 +297,8 @@ class BroomDetector:
                     self.union_polygon = None
                     self.total_area = 0
                     print("AREA DIBERSIHKAN")
+                    # Capture frame and send data
+                    self.capture_and_send(frame_resized, percentage, current_time)
                     self.start_no_overlap_time_high = None
             else:
                 self.start_no_overlap_time_high = None
@@ -308,6 +314,86 @@ class BroomDetector:
                     self.start_no_overlap_time_low = None
             else:
                 self.start_no_overlap_time_low = None
+
+    def capture_and_send(self, frame_resized, percentage, current_time):
+        # Add text overlays before saving
+        cvzone.putTextRect(frame_resized, f"Overlap: {percentage:.2f}%", (10, 50), scale=1, thickness=2, offset=5)
+        cvzone.putTextRect(frame_resized, f"FPS: {int(self.fps)}", (10, 75), scale=1, thickness=2, offset=5)
+
+        # Save the frame to an image file
+        timestamp_str = datetime.now().strftime("%Y%m%d_%H%M%S")
+        image_path = f"images/cleaned_area_{self.camera_name}_{timestamp_str}.jpg"
+        os.makedirs(os.path.dirname(image_path), exist_ok=True)
+        cv2.imwrite(image_path, frame_resized)
+        # Send data to server
+        self.send_to_server(percentage, current_time, image_path)
+
+    def send_to_server(self, percentage, current_time, image_path):
+        def server_address(host):
+            if host == "localhost":
+                user = "root"
+                password = "robot123"
+                database = "report_ai_cctv"
+                port = 3306
+            elif host == "10.5.0.2":
+                user = "robot"
+                password = "robot123"
+                database = "report_ai_cctv"
+                port = 3307
+            return user, password, database, port
+
+        host = "10.5.0.2"  # Replace with your server's host
+
+        try:
+            user, password, database, port = server_address(host)
+            connection = pymysql.connect(host=host, user=user, password=password, database=database, port=port)
+            cursor = connection.cursor()
+            table = "empbro"  # Replace with your table name
+            category = "Menyapu Lantai"
+            camera_name = self.camera_name
+            timestamp_done = datetime.now()
+            timestamp_done_str = timestamp_done.strftime("%Y-%m-%d %H:%M:%S")
+
+            # Define the parameter time to compare with (e.g., 09:00:00)
+            parameter_time_str = "08:30:00"
+            parameter_time = datetime.strptime(parameter_time_str, "%H:%M:%S").time()
+
+            # Extract the time portion of timestamp_done
+            timestamp_done_time = timestamp_done.time()
+
+            # Compare and set isdiscipline
+            if timestamp_done_time > parameter_time:
+                isdiscipline = "Tidak disiplin"
+            else:
+                isdiscipline = "Disiplin"
+
+            with open(image_path, "rb") as file:
+                binary_image = file.read()
+
+            query = f"""
+            INSERT INTO {table} (cam, category, timestamp_done, percentage, image_done, isdiscipline)
+            VALUES (%s, %s, %s, %s, %s, %s)
+            """
+            cursor.execute(
+                query,
+                (
+                    camera_name,
+                    category,
+                    timestamp_done_str,
+                    percentage,
+                    binary_image,
+                    isdiscipline,
+                ),
+            )
+            connection.commit()
+            print(f"Broom data successfully sent to server.")
+        except pymysql.MySQLError as e:
+            print(f"Error sending broom data to server: {e}")
+        finally:
+            if "cursor" in locals():
+                cursor.close()
+            if "connection" in locals():
+                connection.close()
 
     def main(self):
         process_every_n_frames = 2
@@ -336,11 +422,13 @@ class BroomDetector:
                 frame_resized, overlap_detected = self.process_frame(frame, current_time)
 
                 percentage = (self.total_area / self.total_border_area) * 100 if self.total_border_area > 0 else 0
+
+                # Draw text overlays
                 cvzone.putTextRect(frame_resized, f"Overlap: {percentage:.2f}%", (10, 50), scale=1, thickness=2, offset=5)
                 cvzone.putTextRect(frame_resized, f"FPS: {int(self.fps)}", (10, 75), scale=1, thickness=2, offset=5)
 
                 # Check conditions
-                self.check_conditions(percentage, overlap_detected, current_time)
+                self.check_conditions(percentage, overlap_detected, current_time, frame_resized)
 
                 cv2.imshow(window_name, frame_resized)
                 processing_time = (time.time() - start_time) * 1000
@@ -372,11 +460,13 @@ class BroomDetector:
                 self.prev_frame_time = current_time
                 frame_resized, overlap_detected = self.process_frame(frame, current_time)
                 percentage = (self.total_area / self.total_border_area) * 100 if self.total_border_area > 0 else 0
+
+                # Draw text overlays
                 cvzone.putTextRect(frame_resized, f"Overlap: {percentage:.2f}%", (10, 50), scale=1, thickness=2, offset=5)
                 cvzone.putTextRect(frame_resized, f"FPS: {int(self.fps)}", (10, 75), scale=1, thickness=2, offset=5)
 
                 # Check conditions
-                self.check_conditions(percentage, overlap_detected, current_time)
+                self.check_conditions(percentage, overlap_detected, current_time, frame_resized)
 
                 cv2.imshow(window_name, frame_resized)
                 key = cv2.waitKey(1) & 0xFF
@@ -401,5 +491,5 @@ if __name__ == "__main__":
         camera_name="OFFICE2",
         window_size=(960, 540),
         # rtsp_url="D:/NWR/videos/test/broom_test_0002.mp4",
-        rtsp_url="videos/test1.mp4",
+        rtsp_url="videos/brooming1.mp4",
     )
