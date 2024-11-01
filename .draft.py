@@ -18,12 +18,15 @@ class BroomDetector:
         rtsp_url=None,
         window_size=(540, 360),
         new_size=(960, 540),
+        bbox_duration=5,
     ):
         self.BROOM_CONFIDENCE_THRESHOLD = BROOM_CONFIDENCE_THRESHOLD
         self.window_width, self.window_height = window_size
         self.new_width, self.new_height = new_size
         self.prev_frame_time = 0
         self.fps = 0
+        self.bbox_duration = bbox_duration
+        self.active_bboxes = []
         if rtsp_url is not None:
             self.rtsp_url = rtsp_url
             if os.path.isfile(rtsp_url):
@@ -31,7 +34,7 @@ class BroomDetector:
                 cap = cv2.VideoCapture(self.rtsp_url)
                 self.video_fps = cap.get(cv2.CAP_PROP_FPS)
                 if not self.video_fps or math.isnan(self.video_fps):
-                    self.video_fps = 25  # Default FPS if unable to get
+                    self.video_fps = 25
                 cap.release()
                 print(f"Local video file detected. FPS: {self.video_fps}")
             else:
@@ -82,7 +85,7 @@ class BroomDetector:
             results = self.broom_model(frame)
         return results
 
-    def export_frame(self, results):
+    def export_frame(self, results, current_time):
         boxes_info = []
         for result in results:
             for box in result.boxes:
@@ -90,18 +93,28 @@ class BroomDetector:
                 conf = box.conf[0]
                 class_id = self.broom_model.names[int(box.cls[0])]
                 if conf > self.BROOM_CONFIDENCE_THRESHOLD:
+                    self.active_bboxes.append(((x1, y1, x2, y2), current_time))
                     boxes_info.append((x1, y1, x2, y2, conf, class_id))
         return boxes_info
+
+    def draw_segments(self, frame, current_time):
+        overlay = frame.copy()
+        for (x1, y1, x2, y2), start_time in self.active_bboxes:
+            if current_time - start_time < self.bbox_duration:
+                cv2.rectangle(overlay, (x1, y1), (x2, y2), (0, 255, 0), -1)
+            else:
+                self.active_bboxes.remove(((x1, y1, x2, y2), start_time))
+        cv2.addWeighted(overlay, 0.5, frame, 0.5, 0, frame)
 
     def process_frame(self, frame, current_time):
         frame_resized = cv2.resize(frame, (self.new_width, self.new_height))
         results = self.process_model(frame_resized)
-        boxes_info = self.export_frame(results)
+        boxes_info = self.export_frame(results, current_time)
         if boxes_info:
             for x1, y1, x2, y2, conf, class_id in boxes_info:
                 cvzone.putTextRect(frame_resized, f"{class_id} {conf:.2f}", (x1, y1 - 15), scale=1, thickness=2, offset=5, colorR=(0, 255, 255), colorT=(0, 0, 0))
                 cvzone.cornerRect(frame_resized, (x1, y1, x2 - x1, y2 - y1), l=10, t=2, colorR=(0, 255, 255), colorC=(255, 255, 255))
-
+        self.draw_segments(frame_resized, current_time)
         return frame_resized
 
     def main(self):
@@ -114,7 +127,7 @@ class BroomDetector:
 
         if self.video_fps is not None:
             cap = cv2.VideoCapture(self.rtsp_url)
-            frame_delay = int(1000 / self.video_fps)  # Delay in milliseconds
+            frame_delay = int(1000 / self.video_fps)
 
             while cap.isOpened():
                 start_time = time.time()
@@ -126,10 +139,7 @@ class BroomDetector:
                     continue
                 current_time = time.time()
                 time_diff = current_time - self.prev_frame_time
-                if time_diff > 0:
-                    self.fps = 1 / time_diff
-                else:
-                    self.fps = 0
+                self.fps = 1 / time_diff if time_diff > 0 else 0
                 self.prev_frame_time = current_time
                 frame_resized = self.process_frame(frame, current_time)
 
