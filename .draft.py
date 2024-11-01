@@ -134,8 +134,7 @@ class BroomDetector:
                 conf = box.conf[0]
                 class_id = self.broom_model.names[int(box.cls[0])]
                 if conf > self.BROOM_CONFIDENCE_THRESHOLD:
-                    bbox_polygon = box_polygon = box_to_polygon(x1, y1, x2, y2)
-                    intersection = None
+                    bbox_polygon = box_to_polygon(x1, y1, x2, y2)
                     for border in self.borders:
                         if bbox_polygon.intersects(border):
                             intersection = bbox_polygon.intersection(border)
@@ -146,7 +145,7 @@ class BroomDetector:
                                     area = intersection.area
                                     self.total_area += area
                                 elif intersection.geom_type == "MultiPolygon":
-                                    for poly in intersection:
+                                    for poly in intersection.geoms:
                                         boxes_info.append((poly, current_time))
                                         self.active_bboxes.append((poly, current_time))
                                         area = poly.area
@@ -162,7 +161,7 @@ class BroomDetector:
                     coords = coords.reshape((-1, 1, 2))
                     cv2.fillPoly(overlay, [coords], (0, 255, 0))
                 elif intersection_polygon.geom_type == "MultiPolygon":
-                    for poly in intersection_polygon:
+                    for poly in intersection_polygon.geoms:
                         coords = np.array(poly.exterior.coords, np.int32)
                         coords = coords.reshape((-1, 1, 2))
                         cv2.fillPoly(overlay, [coords], (0, 255, 0))
@@ -192,7 +191,7 @@ class BroomDetector:
                     area = intersection_polygon.area
                     cvzone.putTextRect(frame_resized, f"Area: {int(area)}", (x, y - 10), scale=0.5, thickness=1, offset=0, colorR=(0, 255, 255), colorT=(0, 0, 0))
                 elif intersection_polygon.geom_type == "MultiPolygon":
-                    for poly in intersection_polygon:
+                    for poly in intersection_polygon.geoms:
                         x, y, w, h = polygon_to_bbox(poly)
                         cvzone.cornerRect(frame_resized, (x, y, w, h), l=10, t=2, colorR=(0, 255, 255), colorC=(255, 255, 255))
                         area = poly.area
