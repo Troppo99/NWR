@@ -30,7 +30,7 @@ class BroomDetector:
         self.active_bboxes = []
         self.total_area = 0
         self.camera_name = camera_name
-        self.ip_camera = self.camera_config()
+        self.borders, self.ip_camera = self.camera_config()
         if rtsp_url is not None:
             self.rtsp_url = rtsp_url
             if os.path.isfile(rtsp_url):
@@ -60,11 +60,22 @@ class BroomDetector:
 
     def camera_config(self):
         config = {
-            "OFFICE1": "10.5.0.170",
-            "OFFICE2": "10.5.0.182",
-            "OFFICE3": "10.5.0.161",
+            "OFFICE1": {
+                "borders": [],
+                "ip": "10.5.0.170",
+            },
+            "OFFICE2": {
+                "borders": [[(24, 496), (107, 442), (134, 492), (264, 416), (250, 358), (503, 232), (633, 309), (783, 233), (1028, 369), (1073, 328), (1244, 442), (1207, 541), (1153, 642), (1105, 718), (319, 718), (179, 538), (71, 603), (24, 496)]],
+                "ip": "10.5.0.182",
+            },
+            "OFFICE3": {
+                "borders": [],
+                "ip": "10.5.0.161",
+            },
         }
-        return config[self.camera_name]
+        borders = config[self.camera_name]["borders"]
+        ip = config[self.camera_name]["ip"]
+        return borders, ip
 
     def frame_capture(self):
         rtsp_url = self.rtsp_url
@@ -183,7 +194,7 @@ class BroomDetector:
                     continue
                 current_time = time.time()
                 time_diff = current_time - self.prev_frame_time
-                self.fps = 1/time_diff if time_diff > 0 else 0
+                self.fps = 1 / time_diff if time_diff > 0 else 0
                 self.prev_frame_time = current_time
                 frame_resized = self.process_frame(frame, current_time)
                 cvzone.putTextRect(frame_resized, f"Total Area: {self.total_area}", (10, 50), scale=1, thickness=2, offset=5)
@@ -211,5 +222,5 @@ if __name__ == "__main__":
         camera_name="OFFICE2",
         window_size=(960, 540),
         # rtsp_url="D:/NWR/videos/test/broom_test_0002.mp4",
-        rtsp_url="videos/test1.mp4"
+        rtsp_url="videos/test1.mp4",
     )
