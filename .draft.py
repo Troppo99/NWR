@@ -15,10 +15,12 @@ class BroomDetector:
 
     def __init__(
         self,
+        BROOM_CONFIDENCE_THRESHOLD=0.5,
         rtsp_url=None,
         window_size=(540, 360),
         new_size=(960, 540),
     ):
+        self.BROOM_CONFIDENCE_THRESHOLD = BROOM_CONFIDENCE_THRESHOLD
         self.window_width, self.window_height = window_size
         self.new_width, self.new_height = new_size
         self.prev_frame_time = 0
@@ -88,7 +90,7 @@ class BroomDetector:
                 x1, y1, x2, y2 = map(int, box.xyxy[0])
                 conf = box.conf[0]
                 class_id = self.broom_model.names[int(box.cls[0])]
-                if conf > 0.5:
+                if conf > self.BROOM_CONFIDENCE_THRESHOLD:
                     boxes_info.append((x1, y1, x2, y2, conf, class_id))
         return boxes_info
 
@@ -98,6 +100,7 @@ class BroomDetector:
         boxes_info = self.export_frame(results)
         if boxes_info:
             for x1, y1, x2, y2, conf, class_id in boxes_info:
+                cvzone.putTextRect(frame_resized, f"{class_id} {conf:.2f}", (x1, y1 - 15), scale=1, thickness=2, offset=5, colorR=(0, 255, 255), colorT=(0, 0, 0))
                 cvzone.cornerRect(frame_resized, (x1, y1, x2 - x1, y2 - y1), l=10, t=2, colorR=(0, 255, 255), colorC=(255, 255, 255))
 
         return frame_resized
