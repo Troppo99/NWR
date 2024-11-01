@@ -140,6 +140,14 @@ class BroomDetector:
                 self.active_bboxes.remove(((x1, y1, x2, y2), start_time))
         cv2.addWeighted(overlay, 0.5, frame, 0.5, 0, frame)
 
+    def draw_borders(self, frame):
+        if not self.borders:
+            return
+        for border_group in self.borders:
+            pts = np.array(border_group, np.int32)
+            pts = pts.reshape((-1, 1, 2))
+            cv2.polylines(frame, [pts], isClosed=True, color=(0, 255, 255), thickness=2)
+
     def process_frame(self, frame, current_time):
         frame_resized = cv2.resize(frame, (self.new_width, self.new_height))
         results = self.process_model(frame_resized)
@@ -149,12 +157,7 @@ class BroomDetector:
                 cvzone.cornerRect(frame_resized, (x1, y1, x2 - x1, y2 - y1), l=10, t=2, colorR=(0, 255, 255), colorC=(255, 255, 255))
                 cvzone.putTextRect(frame_resized, f"{class_id} {area:.2f}", (x1, y1 + 6), scale=0.5, thickness=1, offset=0, colorR=(0, 255, 255), colorT=(0, 0, 0))
         self.draw_segments(frame_resized, current_time)
-        if not self.borders:
-            return
-        for border_group in self.borders:
-            pts = np.array(border_group, np.int32)
-            pts = pts.reshape((-1, 1, 2))
-            cv2.polylines(frame, [pts], isClosed=True, color=(0, 255, 255), thickness=2)
+        self.draw_borders(frame_resized)
         return frame_resized
 
     def main(self):
@@ -185,6 +188,7 @@ class BroomDetector:
 
                 cvzone.putTextRect(frame_resized, f"Total Area: {self.total_area}", (10, 50), scale=1, thickness=2, offset=5)
                 cvzone.putTextRect(frame_resized, f"FPS: {int(self.fps)}", (10, 75), scale=1, thickness=2, offset=5)
+
                 cv2.imshow(window_name, frame_resized)
                 processing_time = (time.time() - start_time) * 1000
                 adjusted_delay = max(int(frame_delay - processing_time), 1)
