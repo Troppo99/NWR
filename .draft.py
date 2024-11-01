@@ -10,6 +10,7 @@ import threading
 import queue
 import math
 import numpy as np
+from shapely.geometry import Polygon, box
 
 
 class BroomDetector:
@@ -85,7 +86,15 @@ class BroomDetector:
                 scaled_x = int(x * (960 / 1280))
                 scaled_y = int(y * (540 / 720))
                 scaled_group.append((scaled_x, scaled_y))
-            scaled_borders.append(scaled_group)
+            if len(scaled_group) >= 3:
+                polygon = Polygon(scaled_group)
+                if polygon.is_valid:
+                    scaled_borders.append(polygon)
+                else:
+                    print(f"Invalid polygon for camera {self.camera_name}, skipping.")
+            else:
+                print(f"Not enough points to form a polygon for camera {self.camera_name}, skipping.")
+
         return scaled_borders, ip
 
     def frame_capture(self):
@@ -125,26 +134,49 @@ class BroomDetector:
                 conf = box.conf[0]
                 class_id = self.broom_model.names[int(box.cls[0])]
                 if conf > self.BROOM_CONFIDENCE_THRESHOLD:
-                    area = (x2 - x1) * (y2 - y1)
-                    self.total_area += area
-                    self.active_bboxes.append(((x1, y1, x2, y2), current_time))
-                    boxes_info.append((x1, y1, x2, y2, area, class_id))
+                    bbox_polygon = box_polygon = box_to_polygon(x1, y1, x2, y2)
+                    intersection = None
+                    for border in self.borders:
+                        if bbox_polygon.intersects(border):
+                            intersection = bbox_polygon.intersection(border)
+                            if not intersection.is_empty:
+                                if intersection.geom_type == "Polygon":
+                                    boxes_info.append((intersection, current_time))
+                                    self.active_bboxes.append((intersection, current_time))
+                                    area = intersection.area
+                                    self.total_area += area
+                                elif intersection.geom_type == "MultiPolygon":
+                                    for poly in intersection:
+                                        boxes_info.append((poly, current_time))
+                                        self.active_bboxes.append((poly, current_time))
+                                        area = poly.area
+                                        self.total_area += area
         return boxes_info
 
     def draw_segments(self, frame, current_time):
         overlay = frame.copy()
-        for (x1, y1, x2, y2), start_time in self.active_bboxes:
+        for intersection_polygon, start_time in self.active_bboxes[:]:
             if current_time - start_time < self.bbox_duration:
-                cv2.rectangle(overlay, (x1, y1), (x2, y2), (0, 255, 0), -1)
+                if intersection_polygon.geom_type == "Polygon":
+                    coords = np.array(intersection_polygon.exterior.coords, np.int32)
+                    coords = coords.reshape((-1, 1, 2))
+                    cv2.fillPoly(overlay, [coords], (0, 255, 0))
+                elif intersection_polygon.geom_type == "MultiPolygon":
+                    for poly in intersection_polygon:
+                        coords = np.array(poly.exterior.coords, np.int32)
+                        coords = coords.reshape((-1, 1, 2))
+                        cv2.fillPoly(overlay, [coords], (0, 255, 0))
             else:
-                self.active_bboxes.remove(((x1, y1, x2, y2), start_time))
+                self.active_bboxes.remove((intersection_polygon, start_time))
         cv2.addWeighted(overlay, 0.5, frame, 0.5, 0, frame)
 
     def draw_borders(self, frame):
         if not self.borders:
             return
-        for border_group in self.borders:
-            pts = np.array(border_group, np.int32)
+        for border_polygon in self.borders:
+            if border_polygon.geom_type != "Polygon":
+                continue
+            pts = np.array(border_polygon.exterior.coords, np.int32)
             pts = pts.reshape((-1, 1, 2))
             cv2.polylines(frame, [pts], isClosed=True, color=(0, 255, 255), thickness=2)
 
@@ -153,9 +185,18 @@ class BroomDetector:
         results = self.process_model(frame_resized)
         boxes_info = self.export_frame(results, current_time)
         if boxes_info:
-            for x1, y1, x2, y2, area, class_id in boxes_info:
-                cvzone.cornerRect(frame_resized, (x1, y1, x2 - x1, y2 - y1), l=10, t=2, colorR=(0, 255, 255), colorC=(255, 255, 255))
-                cvzone.putTextRect(frame_resized, f"{class_id} {area:.2f}", (x1, y1 + 6), scale=0.5, thickness=1, offset=0, colorR=(0, 255, 255), colorT=(0, 0, 0))
+            for intersection_polygon, _ in boxes_info:
+                if intersection_polygon.geom_type == "Polygon":
+                    x, y, w, h = polygon_to_bbox(intersection_polygon)
+                    cvzone.cornerRect(frame_resized, (x, y, w, h), l=10, t=2, colorR=(0, 255, 255), colorC=(255, 255, 255))
+                    area = intersection_polygon.area
+                    cvzone.putTextRect(frame_resized, f"Area: {int(area)}", (x, y - 10), scale=0.5, thickness=1, offset=0, colorR=(0, 255, 255), colorT=(0, 0, 0))
+                elif intersection_polygon.geom_type == "MultiPolygon":
+                    for poly in intersection_polygon:
+                        x, y, w, h = polygon_to_bbox(poly)
+                        cvzone.cornerRect(frame_resized, (x, y, w, h), l=10, t=2, colorR=(0, 255, 255), colorC=(255, 255, 255))
+                        area = poly.area
+                        cvzone.putTextRect(frame_resized, f"Area: {int(area)}", (x, y - 10), scale=0.5, thickness=1, offset=0, colorR=(0, 255, 255), colorT=(0, 0, 0))
         self.draw_segments(frame_resized, current_time)
         self.draw_borders(frame_resized)
         return frame_resized
@@ -186,7 +227,7 @@ class BroomDetector:
                 self.prev_frame_time = current_time
                 frame_resized = self.process_frame(frame, current_time)
 
-                cvzone.putTextRect(frame_resized, f"Total Area: {self.total_area}", (10, 50), scale=1, thickness=2, offset=5)
+                cvzone.putTextRect(frame_resized, f"Total Area: {int(self.total_area)}", (10, 50), scale=1, thickness=2, offset=5)
                 cvzone.putTextRect(frame_resized, f"FPS: {int(self.fps)}", (10, 75), scale=1, thickness=2, offset=5)
 
                 cv2.imshow(window_name, frame_resized)
@@ -218,7 +259,7 @@ class BroomDetector:
                 self.fps = 1 / time_diff if time_diff > 0 else 0
                 self.prev_frame_time = current_time
                 frame_resized = self.process_frame(frame, current_time)
-                cvzone.putTextRect(frame_resized, f"Total Area: {self.total_area}", (10, 50), scale=1, thickness=2, offset=5)
+                cvzone.putTextRect(frame_resized, f"Total Area: {int(self.total_area)}", (10, 50), scale=1, thickness=2, offset=5)
                 cvzone.putTextRect(frame_resized, f"FPS: {int(self.fps)}", (10, 75), scale=1, thickness=2, offset=5)
                 cv2.imshow(window_name, frame_resized)
                 key = cv2.waitKey(1) & 0xFF
@@ -227,6 +268,15 @@ class BroomDetector:
                     break
             cv2.destroyAllWindows()
             self.frame_thread.join()
+
+
+def box_to_polygon(x1, y1, x2, y2):
+    return box(x1, y1, x2, y2)
+
+
+def polygon_to_bbox(polygon):
+    minx, miny, maxx, maxy = polygon.bounds
+    return int(minx), int(miny), int(maxx - minx), int(maxy - miny)
 
 
 def run_broom(camera_name, window_size=(540, 360), rtsp_url=None):
