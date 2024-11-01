@@ -9,6 +9,7 @@ import time
 import threading
 import queue
 import math
+import numpy as np
 
 
 class BroomDetector:
@@ -72,10 +73,20 @@ class BroomDetector:
                 "ip": "10.5.0.161",
             },
         }
-        """buatkan kode disini untuk mengonversi borders ke size 960x540 karena border ini diambil dari ukuran 1280x720, border akhir harus bilangan bulat"""
-        borders = config[self.camera_name]["borders"]
+        if self.camera_name not in config:
+            raise ValueError(f"Camera name '{self.camera_name}' not found in configuration.")
+
+        original_borders = config[self.camera_name]["borders"]
         ip = config[self.camera_name]["ip"]
-        return borders, ip
+        scaled_borders = []
+        for border_group in original_borders:
+            scaled_group = []
+            for x, y in border_group:
+                scaled_x = int(x * (960 / 1280))
+                scaled_y = int(y * (540 / 720))
+                scaled_group.append((scaled_x, scaled_y))
+            scaled_borders.append(scaled_group)
+        return scaled_borders, ip
 
     def frame_capture(self):
         rtsp_url = self.rtsp_url
@@ -138,6 +149,12 @@ class BroomDetector:
                 cvzone.cornerRect(frame_resized, (x1, y1, x2 - x1, y2 - y1), l=10, t=2, colorR=(0, 255, 255), colorC=(255, 255, 255))
                 cvzone.putTextRect(frame_resized, f"{class_id} {area:.2f}", (x1, y1 + 6), scale=0.5, thickness=1, offset=0, colorR=(0, 255, 255), colorT=(0, 0, 0))
         self.draw_segments(frame_resized, current_time)
+        if not self.borders:
+            return
+        for border_group in self.borders:
+            pts = np.array(border_group, np.int32)
+            pts = pts.reshape((-1, 1, 2))
+            cv2.polylines(frame, [pts], isClosed=True, color=(0, 255, 255), thickness=2)
         return frame_resized
 
     def main(self):
