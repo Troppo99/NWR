@@ -232,47 +232,15 @@ class BroomDetector:
             for intersection_polygon in new_polygons:
                 if intersection_polygon.geom_type == "Polygon":
                     x, y, w, h = self.polygon_to_bbox(intersection_polygon)
-                    cvzone.cornerRect(
-                        frame_resized,
-                        (x, y, w, h),
-                        l=10,
-                        t=2,
-                        colorR=(0, 255, 255),
-                        colorC=(255, 255, 255),
-                    )
+                    cvzone.cornerRect(frame_resized, (x, y, w, h), l=10, t=2, colorR=(0, 255, 255), colorC=(255, 255, 255))
                     area = intersection_polygon.area
-                    cvzone.putTextRect(
-                        frame_resized,
-                        f"Area: {int(area)}",
-                        (x, y - 10),
-                        scale=0.5,
-                        thickness=1,
-                        offset=0,
-                        colorR=(0, 255, 255),
-                        colorT=(0, 0, 0),
-                    )
+                    cvzone.putTextRect(frame_resized, f"Area: {int(area)}", (x, y - 10), scale=0.5, thickness=1, offset=0, colorR=(0, 255, 255), colorT=(0, 0, 0))
                 elif intersection_polygon.geom_type == "MultiPolygon":
                     for poly in intersection_polygon.geoms:
                         x, y, w, h = self.polygon_to_bbox(poly)
-                        cvzone.cornerRect(
-                            frame_resized,
-                            (x, y, w, h),
-                            l=10,
-                            t=2,
-                            colorR=(0, 255, 255),
-                            colorC=(255, 255, 255),
-                        )
+                        cvzone.cornerRect(frame_resized, (x, y, w, h), l=10, t=2, colorR=(0, 255, 255), colorC=(255, 255, 255))
                         area = poly.area
-                        cvzone.putTextRect(
-                            frame_resized,
-                            f"Area: {int(area)}",
-                            (x, y - 10),
-                            scale=0.5,
-                            thickness=1,
-                            offset=0,
-                            colorR=(0, 255, 255),
-                            colorT=(0, 0, 0),
-                        )
+                        cvzone.putTextRect(frame_resized, f"Area: {int(area)}", (x, y - 10), scale=0.5, thickness=1, offset=0, colorR=(0, 255, 255), colorT=(0, 0, 0))
         self.draw_segments(frame_resized)
         self.draw_borders(frame_resized)
         return frame_resized, overlap_detected
@@ -338,22 +306,8 @@ class BroomDetector:
                 frame_resized, overlap_detected = self.process_frame(frame, current_time)
 
                 percentage = (self.total_area / self.total_border_area) * 100 if self.total_border_area > 0 else 0
-                cvzone.putTextRect(
-                    frame_resized,
-                    f"Overlap: {percentage:.2f}%",
-                    (10, 50),
-                    scale=1,
-                    thickness=2,
-                    offset=5,
-                )
-                cvzone.putTextRect(
-                    frame_resized,
-                    f"FPS: {int(self.fps)}",
-                    (10, 75),
-                    scale=1,
-                    thickness=2,
-                    offset=5,
-                )
+                cvzone.putTextRect(frame_resized, f"Overlap: {percentage:.2f}%", (10, 50), scale=1, thickness=2, offset=5)
+                cvzone.putTextRect(frame_resized, f"FPS: {int(self.fps)}", (10, 75), scale=1, thickness=2, offset=5)
 
                 # Check conditions
                 self.check_conditions(percentage, overlap_detected, current_time)
@@ -388,22 +342,8 @@ class BroomDetector:
                 self.prev_frame_time = current_time
                 frame_resized, overlap_detected = self.process_frame(frame, current_time)
                 percentage = (self.total_area / self.total_border_area) * 100 if self.total_border_area > 0 else 0
-                cvzone.putTextRect(
-                    frame_resized,
-                    f"Overlap: {percentage:.2f}%",
-                    (10, 50),
-                    scale=1,
-                    thickness=2,
-                    offset=5,
-                )
-                cvzone.putTextRect(
-                    frame_resized,
-                    f"FPS: {int(self.fps)}",
-                    (10, 75),
-                    scale=1,
-                    thickness=2,
-                    offset=5,
-                )
+                cvzone.putTextRect(frame_resized, f"Overlap: {percentage:.2f}%", (10, 50), scale=1, thickness=2, offset=5)
+                cvzone.putTextRect(frame_resized, f"FPS: {int(self.fps)}", (10, 75), scale=1, thickness=2, offset=5)
 
                 # Check conditions
                 self.check_conditions(percentage, overlap_detected, current_time)
