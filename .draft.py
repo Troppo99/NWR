@@ -68,6 +68,10 @@ class BroomDetector:
         self.start_no_overlap_time_high = None
         self.start_no_overlap_time_low = None
 
+        # Variables for detection pause
+        self.detection_paused = False
+        self.detection_resume_time = None
+
     def camera_config(self):
         config = {
             "OFFICE1": {
@@ -225,6 +229,18 @@ class BroomDetector:
 
     def process_frame(self, frame, current_time):
         frame_resized = cv2.resize(frame, (self.new_width, self.new_height))
+
+        # Check if detection is paused
+        if self.detection_paused:
+            # Check if it's time to resume detection
+            if current_time >= self.detection_resume_time:
+                self.detection_paused = False
+                print("Resuming detection after 10-second pause.")
+            else:
+                # Skip detection and return the frame as is
+                self.draw_borders(frame_resized)
+                return frame_resized, False
+
         results = self.process_model(frame_resized)
         new_polygons, overlap_detected = self.export_frame(results)
         self.update_union_polygon(new_polygons)
@@ -253,6 +269,20 @@ class BroomDetector:
         return int(minx), int(miny), int(maxx - minx), int(maxy - miny)
 
     def check_conditions(self, percentage, overlap_detected, current_time):
+        # New condition: If percentage >= 90%, reset immediately and pause detection
+        if percentage >= 90:
+            # Reset polygons and print message
+            self.union_polygon = None
+            self.total_area = 0
+            print("AREA DIBERSIHKAN - Percentage >= 90%")
+            # Pause detection for 10 seconds
+            self.detection_paused = True
+            self.detection_resume_time = current_time + 10  # 10-second pause
+            # Reset time trackers
+            self.start_no_overlap_time_high = None
+            self.start_no_overlap_time_low = None
+            return  # Skip further checks
+
         # Condition when overlap percentage >= 80%
         if percentage >= 80:
             if not overlap_detected:
