@@ -5,7 +5,7 @@ from shapely.ops import triangulate
 import numpy as np
 
 # RTSP stream URL atau path video lokal
-video_path = "rtsp://admin:oracle2015@10.5.0.170:554/Streaming/Channels/1"
+video_path = "rtsp://admin:oracle2015@10.5.0.182:554/Streaming/Channels/1"
 
 # Initialize variables for storing keypoints
 chains = []  # List to store all chains of keypoints
@@ -258,7 +258,9 @@ def subdivide_polygon_grid(polygon, img, n_subdivisions=4):
             bottom_right = grid_points[row + 1][col + 1]
             bottom_left = grid_points[row + 1][col]
             sub_border = [top_left, top_right, bottom_right, bottom_left]
-            borders.append(sub_border)
+            # Apply rounding to each coordinate
+            sub_border_int = [(int(round(p[0])), int(round(p[1]))) for p in sub_border]
+            borders.append(sub_border_int)
 
     # Print borders
     print(f"borders = {borders}")
