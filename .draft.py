@@ -16,6 +16,7 @@ class BroomDetector:
         self,
         BROOM_CONFIDENCE_THRESHOLD=0.5,
         rtsp_url=None,
+        camera_name=None,
         window_size=(540, 360),
         new_size=(960, 540),
         bbox_duration=5,
@@ -27,6 +28,9 @@ class BroomDetector:
         self.fps = 0
         self.bbox_duration = bbox_duration
         self.active_bboxes = []
+        self.total_area = 0
+        self.camera_name = camera_name
+        self.ip_camera = self.camera_config()
         if rtsp_url is not None:
             self.rtsp_url = rtsp_url
             if os.path.isfile(rtsp_url):
@@ -55,7 +59,12 @@ class BroomDetector:
         print(f"Model Broom device: {next(self.broom_model.model.parameters()).device}")
 
     def camera_config(self):
-        pass
+        config = {
+            "OFFICE1": "10.5.0.170",
+            "OFFICE2": "10.5.0.182",
+            "OFFICE3": "10.5.0.161",
+        }
+        return config[self.camera_name]
 
     def frame_capture(self):
         rtsp_url = self.rtsp_url
@@ -87,14 +96,17 @@ class BroomDetector:
 
     def export_frame(self, results, current_time):
         boxes_info = []
+        self.total_area = 0
         for result in results:
             for box in result.boxes:
                 x1, y1, x2, y2 = map(int, box.xyxy[0])
                 conf = box.conf[0]
                 class_id = self.broom_model.names[int(box.cls[0])]
                 if conf > self.BROOM_CONFIDENCE_THRESHOLD:
+                    area = (x2 - x1) * (y2 - y1)
+                    self.total_area += area
                     self.active_bboxes.append(((x1, y1, x2, y2), current_time))
-                    boxes_info.append((x1, y1, x2, y2, conf, class_id))
+                    boxes_info.append((x1, y1, x2, y2, area, class_id))
         return boxes_info
 
     def draw_segments(self, frame, current_time):
@@ -111,9 +123,9 @@ class BroomDetector:
         results = self.process_model(frame_resized)
         boxes_info = self.export_frame(results, current_time)
         if boxes_info:
-            for x1, y1, x2, y2, conf, class_id in boxes_info:
+            for x1, y1, x2, y2, area, class_id in boxes_info:
                 cvzone.cornerRect(frame_resized, (x1, y1, x2 - x1, y2 - y1), l=10, t=2, colorR=(0, 255, 255), colorC=(255, 255, 255))
-                cvzone.putTextRect(frame_resized, f"{class_id} {conf:.2f}", (x1, y1 + 6), scale=0.5, thickness=1, offset=0, colorR=(0, 255, 255), colorT=(0, 0, 0))
+                cvzone.putTextRect(frame_resized, f"{class_id} {area:.2f}", (x1, y1 + 6), scale=0.5, thickness=1, offset=0, colorR=(0, 255, 255), colorT=(0, 0, 0))
         self.draw_segments(frame_resized, current_time)
         return frame_resized
 
@@ -143,6 +155,7 @@ class BroomDetector:
                 self.prev_frame_time = current_time
                 frame_resized = self.process_frame(frame, current_time)
 
+                cvzone.putTextRect(frame_resized, f"Total Area: {self.total_area}", (10, 50), scale=1, thickness=2, offset=5)
                 cvzone.putTextRect(frame_resized, f"FPS: {int(self.fps)}", (10, 75), scale=1, thickness=2, offset=5)
                 cv2.imshow(window_name, frame_resized)
                 processing_time = (time.time() - start_time) * 1000
@@ -150,15 +163,53 @@ class BroomDetector:
                 key = cv2.waitKey(adjusted_delay) & 0xFF
                 if key == ord("n"):
                     break
+            cap.release()
+            cv2.destroyAllWindows()
+        else:
+            self.frame_thread = threading.Thread(target=self.frame_capture)
+            self.frame_thread.daemon = True
+            self.frame_thread.start()
+
+            while True:
+                if self.stop_event.is_set():
+                    break
+                try:
+                    frame = self.frame_queue.get(timeout=5)
+                except queue.Empty:
+                    continue
+
+                frame_count += 1
+                if frame_count % process_every_n_frames != 0:
+                    continue
+                current_time = time.time()
+                time_diff = current_time - self.prev_frame_time
+                self.fps = 1/time_diff if time_diff > 0 else 0
+                self.prev_frame_time = current_time
+                frame_resized = self.process_frame(frame, current_time)
+                cvzone.putTextRect(frame_resized, f"Total Area: {self.total_area}", (10, 50), scale=1, thickness=2, offset=5)
+                cvzone.putTextRect(frame_resized, f"FPS: {int(self.fps)}", (10, 75), scale=1, thickness=2, offset=5)
+                cv2.imshow(window_name, frame_resized)
+                key = cv2.waitKey(1) & 0xFF
+                if key == ord("n"):
+                    self.stop_event.set()
+                    break
+            cv2.destroyAllWindows()
+            self.frame_thread.join()
 
 
-def run_broom(window_size=(540, 360)):
+def run_broom(camera_name, window_size=(540, 360), rtsp_url=None):
     detector = BroomDetector(
-        rtsp_url="D:/NWR/videos/test/broom_test_0002.mp4",
+        camera_name=camera_name,
+        rtsp_url=rtsp_url,
         window_size=window_size,
     )
     detector.main()
 
 
 if __name__ == "__main__":
-    run_broom(window_size=(960, 540))
+    run_broom(
+        camera_name="OFFICE2",
+        window_size=(960, 540),
+        # rtsp_url="D:/NWR/videos/test/broom_test_0002.mp4",
+        rtsp_url="videos/test1.mp4"
+    )
