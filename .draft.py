@@ -12,7 +12,6 @@ import math
 
 
 class BroomDetector:
-
     def __init__(
         self,
         BROOM_CONFIDENCE_THRESHOLD=0.5,
