@@ -10,6 +10,7 @@ import threading
 import queue
 import math
 
+
 class BroomDetector:
 
     def __init__(
@@ -50,7 +51,7 @@ class BroomDetector:
         print(f"Model Broom device: {next(self.broom_model.model.parameters()).device}")
 
     def camera_config(self):
-        pass        
+        pass
 
     def frame_capture(self):
         rtsp_url = self.rtsp_url
@@ -100,6 +101,7 @@ class BroomDetector:
                 cvzone.cornerRect(frame_resized, (x1, y1, x2 - x1, y2 - y1), l=10, t=2, colorR=(0, 255, 255), colorC=(255, 255, 255))
 
         return frame_resized
+
     def main(self):
         process_every_n_frames = 2
         frame_count = 0
@@ -136,6 +138,7 @@ class BroomDetector:
                 key = cv2.waitKey(adjusted_delay) & 0xFF
                 if key == ord("n"):
                     break
+
 
 def run_broom():
     detector = BroomDetector(
