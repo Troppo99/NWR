@@ -11,7 +11,8 @@ import queue
 import math
 import numpy as np
 from shapely.geometry import Polygon, box
-from shapely.ops import unary_union  # Tambahkan ini
+from shapely.ops import unary_union
+from shapely.geometry import JOIN_STYLE
 
 
 class BroomDetector:
@@ -27,7 +28,7 @@ class BroomDetector:
         self.new_width, self.new_height = (960, 540)
         self.prev_frame_time = 0
         self.fps = 0
-        self.active_bboxes = []
+        self.union_polygon = None  # Initialize the union polygon
         self.total_area = 0
         self.camera_name = camera_name
         self.borders, self.ip_camera = self.camera_config()
@@ -59,6 +60,14 @@ class BroomDetector:
         self.broom_model.overrides["verbose"] = False
         print(f"Model Broom device: {next(self.broom_model.model.parameters()).device}")
 
+        # Variables for tracking the conditions
+        self.last_overlap_time = time.time()
+        self.area_cleared = False
+
+        # Initialize time trackers
+        self.start_no_overlap_time_high = None
+        self.start_no_overlap_time_low = None
+
     def camera_config(self):
         config = {
             "OFFICE1": {
@@ -66,7 +75,28 @@ class BroomDetector:
                 "ip": "10.5.0.170",
             },
             "OFFICE2": {
-                "borders": [[(24, 496), (107, 442), (134, 492), (264, 416), (250, 358), (503, 232), (633, 309), (783, 233), (1028, 369), (1073, 328), (1244, 442), (1207, 541), (1153, 642), (1105, 718), (319, 718), (179, 538), (71, 603), (24, 496)]],
+                "borders": [
+                    [
+                        (24, 496),
+                        (107, 442),
+                        (134, 492),
+                        (264, 416),
+                        (250, 358),
+                        (503, 232),
+                        (633, 309),
+                        (783, 233),
+                        (1028, 369),
+                        (1073, 328),
+                        (1244, 442),
+                        (1207, 541),
+                        (1153, 642),
+                        (1105, 718),
+                        (319, 718),
+                        (179, 538),
+                        (71, 603),
+                        (24, 496),
+                    ]
+                ],
                 "ip": "10.5.0.182",
             },
             "OFFICE3": {
@@ -125,16 +155,17 @@ class BroomDetector:
             results = self.broom_model(frame, stream=True, imgsz=960)
         return results
 
-    def export_frame(self, results, current_time):
-        boxes_info = []
+    def export_frame(self, results):
+        new_polygons = []
+        overlap_detected = False
         for result in results:
             for box in result.boxes:
                 x1, y1, x2, y2 = map(int, box.xyxy[0])
                 dp = 0.2
-                x1 = x1-dp*(x2-x1)
-                y1 = y1-dp*(y2-y1)
-                x2 = x2+dp*(x2-x1)
-                y2 = y2+dp*(y2-y1)
+                x1 = x1 - dp * (x2 - x1)
+                y1 = y1 - dp * (y2 - y1)
+                x2 = x2 + dp * (x2 - x1)
+                y2 = y2 + dp * (y2 - y1)
                 conf = box.conf[0]
                 class_id = self.broom_model.names[int(box.cls[0])]
                 if conf > self.BROOM_CONFIDENCE_THRESHOLD:
@@ -143,33 +174,42 @@ class BroomDetector:
                         if bbox_polygon.intersects(border):
                             intersection = bbox_polygon.intersection(border)
                             if not intersection.is_empty:
-                                if intersection.geom_type == "Polygon":
-                                    boxes_info.append((intersection, current_time))
-                                    self.active_bboxes.append((intersection, current_time))
-                                elif intersection.geom_type == "MultiPolygon":
-                                    for poly in intersection.geoms:
-                                        boxes_info.append((poly, current_time))
-                                        self.active_bboxes.append((poly, current_time))
-        return boxes_info
+                                overlap_detected = True
+                                if intersection.geom_type in [
+                                    "Polygon",
+                                    "MultiPolygon",
+                                ]:
+                                    new_polygons.append(intersection)
+        return new_polygons, overlap_detected
 
-    def draw_segments(self, frame, current_time):
+    def update_union_polygon(self, new_polygons):
+        if new_polygons:
+            if self.union_polygon is None:
+                self.union_polygon = unary_union(new_polygons)
+            else:
+                self.union_polygon = unary_union([self.union_polygon] + new_polygons)
+            # Simplify the union polygon to reduce complexity
+            self.union_polygon = self.union_polygon.simplify(tolerance=0.5, preserve_topology=True)
+            # Ensure the polygon remains valid
+            if not self.union_polygon.is_valid:
+                self.union_polygon = self.union_polygon.buffer(0, join_style=JOIN_STYLE.mitre)
+            self.total_area = self.union_polygon.area
+
+    def draw_segments(self, frame):
         overlay = frame.copy()
-        for intersection_polygon, start_time in self.active_bboxes[:]:
-            if intersection_polygon.geom_type == "Polygon":
-                coords = np.array(intersection_polygon.exterior.coords, np.int32)
+        # Draw the union polygon
+        if self.union_polygon is not None and not self.union_polygon.is_empty:
+            if self.union_polygon.geom_type == "Polygon":
+                coords = np.array(self.union_polygon.exterior.coords, np.int32)
                 coords = coords.reshape((-1, 1, 2))
                 cv2.fillPoly(overlay, [coords], (0, 255, 0))
-            elif intersection_polygon.geom_type == "MultiPolygon":
-                for poly in intersection_polygon.geoms:
+            elif self.union_polygon.geom_type == "MultiPolygon":
+                for poly in self.union_polygon.geoms:
+                    if poly.is_empty:
+                        continue
                     coords = np.array(poly.exterior.coords, np.int32)
                     coords = coords.reshape((-1, 1, 2))
                     cv2.fillPoly(overlay, [coords], (0, 255, 0))
-        if self.active_bboxes:
-            polygons = [poly for poly, _ in self.active_bboxes]
-            union_polygon = unary_union(polygons)
-            self.total_area = union_polygon.area
-        else:
-            self.total_area = 0
 
         cv2.addWeighted(overlay, 0.5, frame, 0.5, 0, frame)
 
@@ -186,23 +226,56 @@ class BroomDetector:
     def process_frame(self, frame, current_time):
         frame_resized = cv2.resize(frame, (self.new_width, self.new_height))
         results = self.process_model(frame_resized)
-        boxes_info = self.export_frame(results, current_time)
-        if boxes_info:
-            for intersection_polygon, _ in boxes_info:
+        new_polygons, overlap_detected = self.export_frame(results)
+        self.update_union_polygon(new_polygons)
+        if new_polygons:
+            for intersection_polygon in new_polygons:
                 if intersection_polygon.geom_type == "Polygon":
                     x, y, w, h = self.polygon_to_bbox(intersection_polygon)
-                    cvzone.cornerRect(frame_resized, (x, y, w, h), l=10, t=2, colorR=(0, 255, 255), colorC=(255, 255, 255))
+                    cvzone.cornerRect(
+                        frame_resized,
+                        (x, y, w, h),
+                        l=10,
+                        t=2,
+                        colorR=(0, 255, 255),
+                        colorC=(255, 255, 255),
+                    )
                     area = intersection_polygon.area
-                    cvzone.putTextRect(frame_resized, f"Area: {int(area)}", (x, y - 10), scale=0.5, thickness=1, offset=0, colorR=(0, 255, 255), colorT=(0, 0, 0))
+                    cvzone.putTextRect(
+                        frame_resized,
+                        f"Area: {int(area)}",
+                        (x, y - 10),
+                        scale=0.5,
+                        thickness=1,
+                        offset=0,
+                        colorR=(0, 255, 255),
+                        colorT=(0, 0, 0),
+                    )
                 elif intersection_polygon.geom_type == "MultiPolygon":
                     for poly in intersection_polygon.geoms:
                         x, y, w, h = self.polygon_to_bbox(poly)
-                        cvzone.cornerRect(frame_resized, (x, y, w, h), l=10, t=2, colorR=(0, 255, 255), colorC=(255, 255, 255))
+                        cvzone.cornerRect(
+                            frame_resized,
+                            (x, y, w, h),
+                            l=10,
+                            t=2,
+                            colorR=(0, 255, 255),
+                            colorC=(255, 255, 255),
+                        )
                         area = poly.area
-                        cvzone.putTextRect(frame_resized, f"Area: {int(area)}", (x, y - 10), scale=0.5, thickness=1, offset=0, colorR=(0, 255, 255), colorT=(0, 0, 0))
-        self.draw_segments(frame_resized, current_time)
+                        cvzone.putTextRect(
+                            frame_resized,
+                            f"Area: {int(area)}",
+                            (x, y - 10),
+                            scale=0.5,
+                            thickness=1,
+                            offset=0,
+                            colorR=(0, 255, 255),
+                            colorT=(0, 0, 0),
+                        )
+        self.draw_segments(frame_resized)
         self.draw_borders(frame_resized)
-        return frame_resized
+        return frame_resized, overlap_detected
 
     def box_to_polygon(self, x1, y1, x2, y2):
         return box(x1, y1, x2, y2)
@@ -210,6 +283,33 @@ class BroomDetector:
     def polygon_to_bbox(self, polygon):
         minx, miny, maxx, maxy = polygon.bounds
         return int(minx), int(miny), int(maxx - minx), int(maxy - miny)
+
+    def check_conditions(self, percentage, overlap_detected, current_time):
+        # Condition when overlap percentage >= 80%
+        if percentage >= 80:
+            if not overlap_detected:
+                if self.start_no_overlap_time_high is None:
+                    self.start_no_overlap_time_high = current_time
+                elif current_time - self.start_no_overlap_time_high >= 5:
+                    # Reset polygons and print message
+                    self.union_polygon = None
+                    self.total_area = 0
+                    print("AREA DIBERSIHKAN")
+                    self.start_no_overlap_time_high = None
+            else:
+                self.start_no_overlap_time_high = None
+        # Condition when overlap percentage < 80%
+        else:
+            if not overlap_detected:
+                if self.start_no_overlap_time_low is None:
+                    self.start_no_overlap_time_low = current_time
+                elif current_time - self.start_no_overlap_time_low >= 5:
+                    # Reset polygons
+                    self.union_polygon = None
+                    self.total_area = 0
+                    self.start_no_overlap_time_low = None
+            else:
+                self.start_no_overlap_time_low = None
 
     def main(self):
         process_every_n_frames = 2
@@ -235,11 +335,28 @@ class BroomDetector:
                 time_diff = current_time - self.prev_frame_time
                 self.fps = 1 / time_diff if time_diff > 0 else 0
                 self.prev_frame_time = current_time
-                frame_resized = self.process_frame(frame, current_time)
+                frame_resized, overlap_detected = self.process_frame(frame, current_time)
 
                 percentage = (self.total_area / self.total_border_area) * 100 if self.total_border_area > 0 else 0
-                cvzone.putTextRect(frame_resized, f"Overlap: {percentage:.2f}%", (10, 50), scale=1, thickness=2, offset=5)
-                cvzone.putTextRect(frame_resized, f"FPS: {int(self.fps)}", (10, 75), scale=1, thickness=2, offset=5)
+                cvzone.putTextRect(
+                    frame_resized,
+                    f"Overlap: {percentage:.2f}%",
+                    (10, 50),
+                    scale=1,
+                    thickness=2,
+                    offset=5,
+                )
+                cvzone.putTextRect(
+                    frame_resized,
+                    f"FPS: {int(self.fps)}",
+                    (10, 75),
+                    scale=1,
+                    thickness=2,
+                    offset=5,
+                )
+
+                # Check conditions
+                self.check_conditions(percentage, overlap_detected, current_time)
 
                 cv2.imshow(window_name, frame_resized)
                 processing_time = (time.time() - start_time) * 1000
@@ -269,10 +386,28 @@ class BroomDetector:
                 time_diff = current_time - self.prev_frame_time
                 self.fps = 1 / time_diff if time_diff > 0 else 0
                 self.prev_frame_time = current_time
-                frame_resized = self.process_frame(frame, current_time)
+                frame_resized, overlap_detected = self.process_frame(frame, current_time)
                 percentage = (self.total_area / self.total_border_area) * 100 if self.total_border_area > 0 else 0
-                cvzone.putTextRect(frame_resized, f"Overlap: {percentage:.2f}%", (10, 50), scale=1, thickness=2, offset=5)
-                cvzone.putTextRect(frame_resized, f"FPS: {int(self.fps)}", (10, 75), scale=1, thickness=2, offset=5)
+                cvzone.putTextRect(
+                    frame_resized,
+                    f"Overlap: {percentage:.2f}%",
+                    (10, 50),
+                    scale=1,
+                    thickness=2,
+                    offset=5,
+                )
+                cvzone.putTextRect(
+                    frame_resized,
+                    f"FPS: {int(self.fps)}",
+                    (10, 75),
+                    scale=1,
+                    thickness=2,
+                    offset=5,
+                )
+
+                # Check conditions
+                self.check_conditions(percentage, overlap_detected, current_time)
+
                 cv2.imshow(window_name, frame_resized)
                 key = cv2.waitKey(1) & 0xFF
                 if key == ord("n"):
