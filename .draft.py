@@ -33,6 +33,7 @@ class BroomDetector:
         self.total_area = 0
         self.camera_name = camera_name
         self.borders, self.ip_camera = self.camera_config()
+        self.total_border_area = sum(border.area for border in self.borders) if self.borders else 0
         if rtsp_url is not None:
             self.rtsp_url = rtsp_url
             if os.path.isfile(rtsp_url):
@@ -134,7 +135,7 @@ class BroomDetector:
                 conf = box.conf[0]
                 class_id = self.broom_model.names[int(box.cls[0])]
                 if conf > self.BROOM_CONFIDENCE_THRESHOLD:
-                    bbox_polygon = box_to_polygon(x1, y1, x2, y2)
+                    bbox_polygon = self.box_to_polygon(x1, y1, x2, y2)
                     for border in self.borders:
                         if bbox_polygon.intersects(border):
                             intersection = bbox_polygon.intersection(border)
@@ -189,19 +190,26 @@ class BroomDetector:
         if boxes_info:
             for intersection_polygon, _ in boxes_info:
                 if intersection_polygon.geom_type == "Polygon":
-                    x, y, w, h = polygon_to_bbox(intersection_polygon)
+                    x, y, w, h = self.polygon_to_bbox(intersection_polygon)
                     cvzone.cornerRect(frame_resized, (x, y, w, h), l=10, t=2, colorR=(0, 255, 255), colorC=(255, 255, 255))
                     area = intersection_polygon.area
                     cvzone.putTextRect(frame_resized, f"Area: {int(area)}", (x, y - 10), scale=0.5, thickness=1, offset=0, colorR=(0, 255, 255), colorT=(0, 0, 0))
                 elif intersection_polygon.geom_type == "MultiPolygon":
                     for poly in intersection_polygon.geoms:
-                        x, y, w, h = polygon_to_bbox(poly)
+                        x, y, w, h = self.polygon_to_bbox(poly)
                         cvzone.cornerRect(frame_resized, (x, y, w, h), l=10, t=2, colorR=(0, 255, 255), colorC=(255, 255, 255))
                         area = poly.area
                         cvzone.putTextRect(frame_resized, f"Area: {int(area)}", (x, y - 10), scale=0.5, thickness=1, offset=0, colorR=(0, 255, 255), colorT=(0, 0, 0))
         self.draw_segments(frame_resized, current_time)
         self.draw_borders(frame_resized)
         return frame_resized
+
+    def box_to_polygon(x1, y1, x2, y2):
+        return box(x1, y1, x2, y2)
+
+    def polygon_to_bbox(polygon):
+        minx, miny, maxx, maxy = polygon.bounds
+        return int(minx), int(miny), int(maxx - minx), int(maxy - miny)
 
     def main(self):
         process_every_n_frames = 2
@@ -229,7 +237,8 @@ class BroomDetector:
                 self.prev_frame_time = current_time
                 frame_resized = self.process_frame(frame, current_time)
 
-                cvzone.putTextRect(frame_resized, f"Total Area: {int(self.total_area)}", (10, 50), scale=1, thickness=2, offset=5)
+                percentage = (self.total_area / self.total_border_area) * 100 if self.total_border_area > 0 else 0
+                cvzone.putTextRect(frame_resized, f"Overlap: {percentage:.2f}%", (10, 50), scale=1, thickness=2, offset=5)
                 cvzone.putTextRect(frame_resized, f"FPS: {int(self.fps)}", (10, 75), scale=1, thickness=2, offset=5)
 
                 cv2.imshow(window_name, frame_resized)
@@ -261,7 +270,8 @@ class BroomDetector:
                 self.fps = 1 / time_diff if time_diff > 0 else 0
                 self.prev_frame_time = current_time
                 frame_resized = self.process_frame(frame, current_time)
-                cvzone.putTextRect(frame_resized, f"Total Area: {int(self.total_area)}", (10, 50), scale=1, thickness=2, offset=5)
+                percentage = (self.total_area / self.total_border_area) * 100 if self.total_border_area > 0 else 0
+                cvzone.putTextRect(frame_resized, f"Overlap: {percentage:.2f}%", (10, 50), scale=1, thickness=2, offset=5)
                 cvzone.putTextRect(frame_resized, f"FPS: {int(self.fps)}", (10, 75), scale=1, thickness=2, offset=5)
                 cv2.imshow(window_name, frame_resized)
                 key = cv2.waitKey(1) & 0xFF
@@ -270,15 +280,6 @@ class BroomDetector:
                     break
             cv2.destroyAllWindows()
             self.frame_thread.join()
-
-
-def box_to_polygon(x1, y1, x2, y2):
-    return box(x1, y1, x2, y2)
-
-
-def polygon_to_bbox(polygon):
-    minx, miny, maxx, maxy = polygon.bounds
-    return int(minx), int(miny), int(maxx - minx), int(maxy - miny)
 
 
 def run_broom(camera_name, window_size=(540, 360), rtsp_url=None):
