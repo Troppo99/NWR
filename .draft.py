@@ -204,10 +204,10 @@ class BroomDetector:
         self.draw_borders(frame_resized)
         return frame_resized
 
-    def box_to_polygon(x1, y1, x2, y2):
+    def box_to_polygon(self, x1, y1, x2, y2):
         return box(x1, y1, x2, y2)
 
-    def polygon_to_bbox(polygon):
+    def polygon_to_bbox(self, polygon):
         minx, miny, maxx, maxy = polygon.bounds
         return int(minx), int(miny), int(maxx - minx), int(maxy - miny)
 
