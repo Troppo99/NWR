@@ -328,7 +328,7 @@ class BroomDetector:
         # Send data to server
         self.send_to_server(percentage, current_time, image_path)
 
-    def send_to_server(self, percentage, current_time, image_path):
+    def send_to_server(self, percentage, current_time, image_path, host="10.5.0.2"):
         def server_address(host):
             if host == "localhost":
                 user = "root"
@@ -341,8 +341,6 @@ class BroomDetector:
                 database = "report_ai_cctv"
                 port = 3307
             return user, password, database, port
-
-        host = "10.5.0.2"  # Replace with your server's host
 
         try:
             user, password, database, port = server_address(host)
