@@ -352,37 +352,14 @@ class BroomDetector:
             timestamp_done = datetime.now()
             timestamp_done_str = timestamp_done.strftime("%Y-%m-%d %H:%M:%S")
 
-            # Define the parameter time to compare with (e.g., 09:00:00)
-            parameter_time_str = "08:30:00"
-            parameter_time = datetime.strptime(parameter_time_str, "%H:%M:%S").time()
-
-            # Extract the time portion of timestamp_done
-            timestamp_done_time = timestamp_done.time()
-
-            # Compare and set isdiscipline
-            if timestamp_done_time > parameter_time:
-                isdiscipline = "Tidak disiplin"
-            else:
-                isdiscipline = "Disiplin"
-
             with open(image_path, "rb") as file:
                 binary_image = file.read()
 
             query = f"""
-            INSERT INTO {table} (cam, category, timestamp_done, percentage, image_done, isdiscipline)
-            VALUES (%s, %s, %s, %s, %s, %s)
+            INSERT INTO {table} (cam, category, timestamp_done, percentage, image_done)
+            VALUES (%s, %s, %s, %s, %s)
             """
-            cursor.execute(
-                query,
-                (
-                    camera_name,
-                    category,
-                    timestamp_done_str,
-                    percentage,
-                    binary_image,
-                    isdiscipline,
-                ),
-            )
+            cursor.execute(query, (camera_name, category, timestamp_done_str, percentage, binary_image))
             connection.commit()
             print(f"Broom data successfully sent to server.")
         except pymysql.MySQLError as e:
