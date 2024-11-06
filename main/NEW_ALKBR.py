@@ -328,7 +328,7 @@ class BroomDetector:
         # Send data to server
         self.send_to_server(percentage, current_time, image_path)
 
-    def send_to_server(self, percentage, current_time, image_path, host="10.5.0.2"):
+    def send_to_server(self, percentage, image_path, host="10.5.0.2"):
         def server_address(host):
             if host == "localhost":
                 user = "root"
