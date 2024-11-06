@@ -281,7 +281,7 @@ class BroomDetector:
             self.capture_and_send(frame_resized, percentage, current_time)
             # Pause detection for 10 seconds
             self.detection_paused = True
-            self.detection_resume_time = current_time + 10  # 10-second pause
+            self.detection_resume_time = current_time + 30  # 10-second pause
             # Reset time trackers
             self.start_no_overlap_time_high = None
             self.start_no_overlap_time_low = None
@@ -292,7 +292,7 @@ class BroomDetector:
             if not overlap_detected:
                 if self.start_no_overlap_time_high is None:
                     self.start_no_overlap_time_high = current_time
-                elif current_time - self.start_no_overlap_time_high >= 5:
+                elif current_time - self.start_no_overlap_time_high >= 30:
                     # Reset polygons and print message
                     self.union_polygon = None
                     self.total_area = 0
@@ -302,12 +302,13 @@ class BroomDetector:
                     self.start_no_overlap_time_high = None
             else:
                 self.start_no_overlap_time_high = None
+
         # Condition when overlap percentage < 80%
         else:
             if not overlap_detected:
                 if self.start_no_overlap_time_low is None:
                     self.start_no_overlap_time_low = current_time
-                elif current_time - self.start_no_overlap_time_low >= 5:
+                elif current_time - self.start_no_overlap_time_low >= 10:
                     # Reset polygons
                     self.union_polygon = None
                     self.total_area = 0
