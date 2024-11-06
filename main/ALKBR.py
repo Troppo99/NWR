@@ -26,6 +26,7 @@ class BroomDetector:
         new_size=(960, 540),
         rtsp_url=None,
         window_size=(540, 360),
+        display=False,  # Tambahkan parameter display di sini
     ):
         self.BROOM_CONFIDENCE_THRESHOLD = BROOM_CONFIDENCE_THRESHOLD
         self.BROOM_ABSENCE_THRESHOLD = BROOM_ABSENCE_THRESHOLD
@@ -45,7 +46,11 @@ class BroomDetector:
         self.first_green_time = None
         self.is_counting = False
         self.camera_name = camera_name
+        self.display = display  # Simpan nilai display
         self.borders, self.ip_camera, self.idx = self.camera_config()
+
+        if self.display is False:
+            print(f">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>\n\tDisplay tidak dijalankan!\n<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<")
 
         # Adjust rtsp_url handling
         if rtsp_url is not None:
@@ -744,21 +749,24 @@ class BroomDetector:
             self.is_counting = False
             self.broom_absence_timer_start = None
 
-        if boxes_info:
-            for x1, y1, x2, y2, conf, class_id in boxes_info:
-                # Draw bounding boxes
-                cvzone.cornerRect(frame_resized, (x1, y1, x2 - x1, y2 - y1), l=10, t=2, colorR=(0, 255, 255), colorC=(255, 255, 255))
+        # Drawing boxes and overlays
+        if self.display:
+            if boxes_info:
+                for x1, y1, x2, y2, conf, class_id in boxes_info:
+                    # Draw bounding boxes
+                    cvzone.cornerRect(frame_resized, (x1, y1, x2 - x1, y2 - y1), l=10, t=2, colorR=(0, 255, 255), colorC=(255, 255, 255))
 
         overlay = frame_resized.copy()
         alpha = 0.5
         for border_pt, color in zip(self.borders_pts, border_colors):
             cv2.fillPoly(overlay, pts=[border_pt], color=color)
         cv2.addWeighted(overlay, alpha, frame_resized, 1 - alpha, 0, frame_resized)
+
         if self.is_counting and self.first_green_time is not None:
             self.elapsed_time = current_time - self.first_green_time
             minutes, seconds = divmod(int(self.elapsed_time), 60)
             time_str = f"Elapsed Time: {minutes:02d}:{seconds:02d}"
-            if self.show_text:
+            if self.show_text and self.display:
                 cvzone.putTextRect(frame_resized, time_str, (10, 100), scale=1, thickness=2, offset=5)
 
         return frame_resized
@@ -836,9 +844,10 @@ class BroomDetector:
         process_every_n_frames = 2
         frame_count = 0
 
-        window_name = f"BROOM{self.idx} : {self.camera_name}"
-        cv2.namedWindow(window_name, cv2.WINDOW_NORMAL)
-        cv2.resizeWindow(window_name, self.window_width, self.window_height)
+        if self.display:
+            window_name = f"BROOM{self.idx} : {self.camera_name}"
+            cv2.namedWindow(window_name, cv2.WINDOW_NORMAL)
+            cv2.resizeWindow(window_name, self.window_width, self.window_height)
 
         if self.video_fps is not None:
             # Local video file, process frames in the main thread
@@ -869,28 +878,34 @@ class BroomDetector:
 
                 frame_resized = self.process_frame(frame, current_time, percentage_green)
 
-                if self.show_text:
-                    cvzone.putTextRect(
-                        frame_resized,
-                        f"Percentage of Green Border: {percentage_green:.2f}%",
-                        (10, 50),
-                        scale=1,
-                        thickness=2,
-                        offset=5,
-                    )
-                    cvzone.putTextRect(frame_resized, f"FPS: {int(self.fps)}", (10, 75), scale=1, thickness=2, offset=5)
+                if self.display:
+                    if self.show_text:
+                        cvzone.putTextRect(
+                            frame_resized,
+                            f"Percentage of Green Border: {percentage_green:.2f}%",
+                            (10, 50),
+                            scale=1,
+                            thickness=2,
+                            offset=5,
+                        )
+                        cvzone.putTextRect(frame_resized, f"FPS: {int(self.fps)}", (10, 75), scale=1, thickness=2, offset=5)
+                    cv2.imshow(window_name, frame_resized)
+                    key = cv2.waitKey(1) & 0xFF
+                    if key == ord("n"):
+                        break
+                    elif key == ord("s"):
+                        self.show_text = not self.show_text
+                else:
+                    # Jika display=False, tunggu sedikit untuk menghindari penggunaan CPU yang tinggi
+                    time.sleep(0.01)
 
-                cv2.imshow(window_name, frame_resized)
                 processing_time = (time.time() - start_time) * 1000  # Convert to milliseconds
                 adjusted_delay = max(int(frame_delay - processing_time), 1)
-                key = cv2.waitKey(adjusted_delay) & 0xFF
-                if key == ord("n"):
-                    break
-                elif key == ord("s"):
-                    self.show_text = not self.show_text
+                # Jika display=False, tidak perlu memanggil cv2.waitKey()
 
             cap.release()
-            cv2.destroyAllWindows()
+            if self.display:
+                cv2.destroyAllWindows()
         else:
             # RTSP stream, use frame capture thread
             self.frame_thread = threading.Thread(target=self.frame_capture)
@@ -922,30 +937,35 @@ class BroomDetector:
 
                 frame_resized = self.process_frame(frame, current_time, percentage_green)
 
-                if self.show_text:
-                    cvzone.putTextRect(
-                        frame_resized,
-                        f"Percentage of Green Border: {percentage_green:.2f}%",
-                        (10, 50),
-                        scale=1,
-                        thickness=2,
-                        offset=5,
-                    )
-                    cvzone.putTextRect(frame_resized, f"FPS: {int(self.fps)}", (10, 75), scale=1, thickness=2, offset=5)
+                if self.display:
+                    if self.show_text:
+                        cvzone.putTextRect(
+                            frame_resized,
+                            f"Percentage of Green Border: {percentage_green:.2f}%",
+                            (10, 50),
+                            scale=1,
+                            thickness=2,
+                            offset=5,
+                        )
+                        cvzone.putTextRect(frame_resized, f"FPS: {int(self.fps)}", (10, 75), scale=1, thickness=2, offset=5)
+                    cv2.imshow(window_name, frame_resized)
+                    key = cv2.waitKey(1) & 0xFF
+                    if key == ord("n"):
+                        self.stop_event.set()
+                        break
+                    elif key == ord("s"):
+                        self.show_text = not self.show_text
+                else:
+                    # Jika display=False, tidak perlu memanggil cv2.imshow atau cv2.waitKey
+                    # Tambahkan sedikit delay untuk menghindari penggunaan CPU yang tinggi
+                    time.sleep(0.01)
 
-                cv2.imshow(window_name, frame_resized)
-                key = cv2.waitKey(1) & 0xFF
-                if key == ord("n"):
-                    self.stop_event.set()
-                    break
-                elif key == ord("s"):
-                    self.show_text = not self.show_text
-
-            cv2.destroyAllWindows()
+            if self.display:
+                cv2.destroyAllWindows()
             self.frame_thread.join()
 
 
-def run_broom(BROOM_ABSENCE_THRESHOLD, BROOM_TOUCH_THRESHOLD, BROOM_PERCENTAGE_GREEN_THRESHOLD, camera_name, window_size=(540, 360), rtsp_url=None):
+def run_broom(BROOM_ABSENCE_THRESHOLD, BROOM_TOUCH_THRESHOLD, BROOM_PERCENTAGE_GREEN_THRESHOLD, camera_name, window_size=(540, 360), rtsp_url=None, display=False):
     detector = BroomDetector(
         BROOM_ABSENCE_THRESHOLD=BROOM_ABSENCE_THRESHOLD,
         BROOM_TOUCH_THRESHOLD=BROOM_TOUCH_THRESHOLD,
@@ -953,6 +973,7 @@ def run_broom(BROOM_ABSENCE_THRESHOLD, BROOM_TOUCH_THRESHOLD, BROOM_PERCENTAGE_G
         camera_name=camera_name,
         window_size=window_size,
         rtsp_url=rtsp_url,
+        display=display,  # Tambahkan parameter display di sini
     )
 
     detector.main()
@@ -966,4 +987,5 @@ if __name__ == "__main__":
         camera_name="OFFICE2",
         window_size=(540, 360),
         rtsp_url="videos/test1.mp4",
+        display=False,  # Set display sesuai kebutuhan
     )

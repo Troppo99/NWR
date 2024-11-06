@@ -26,6 +26,7 @@ class CarpalDetector:
         new_size=(960, 540),
         rtsp_url=None,
         window_size=(540, 360),
+        display=False,  # Tambahkan parameter display di sini
     ):
         self.CARPAL_CONFIDENCE_THRESHOLD = CARPAL_CONFIDENCE_THRESHOLD
         self.CARPAL_ABSENCE_THRESHOLD = CARPAL_ABSENCE_THRESHOLD
@@ -45,10 +46,14 @@ class CarpalDetector:
         self.first_green_time = None
         self.is_counting = False
         self.camera_name = camera_name
+        self.display = display  # Simpan nilai display
         self.rtsp_url = rtsp_url
         self.video_fps = None  # Initialize video FPS
         self.is_local_file = False  # Flag to indicate if rtsp_url is a local file
         self.borders, self.ip_camera, self.idx = self.camera_config()
+
+        if self.display is False:
+            print(f">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>\n\tDisplay tidak dijalankan!\n<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<")
 
         if rtsp_url is not None:
             self.rtsp_url = rtsp_url  # Keep the provided rtsp_url
@@ -337,7 +342,7 @@ class CarpalDetector:
                         cv2.addWeighted(overlay, alpha, frame_resized, 1 - alpha, 0, frame_resized)
                         minutes, seconds = divmod(int(self.elapsed_time), 60)
                         time_str = f"Elapsed Time: {minutes:02d}:{seconds:02d}"
-                        if self.show_text:
+                        if self.show_text and self.display:
                             cvzone.putTextRect(frame_resized, time_str, (10, self.new_height - 100), scale=1, thickness=2, offset=5)
                             cvzone.putTextRect(
                                 frame_resized,
@@ -385,7 +390,7 @@ class CarpalDetector:
             cv2.addWeighted(overlay, alpha, frame_resized, 1 - alpha, 0, frame_resized)
             minutes, seconds = divmod(int(self.elapsed_time), 60)
             time_str = f"Elapsed Time: {minutes:02d}:{seconds:02d}"
-            if self.show_text:
+            if self.show_text and self.display:
                 cvzone.putTextRect(frame_resized, time_str, (10, self.new_height - 100), scale=1, thickness=2, offset=5)
                 cvzone.putTextRect(
                     frame_resized,
@@ -412,18 +417,19 @@ class CarpalDetector:
             self.carpal_absence_timer_start = None
 
         # Menggambar keypoints dengan ukuran lingkaran berbeda
-        if keypoint_positions:
-            for x, y, color in coords:
-                cv2.line(frame_resized, x, y, color, 2)
-            for keypoints_list in keypoint_positions:
-                for idx, point in enumerate(keypoints_list):
-                    if point is not None:
-                        if idx == 9 or idx == 10:
-                            radius = 10  # Radius lebih besar untuk titik 9 dan 10
-                        else:
-                            radius = 3  # Radius default
-                        cv2.circle(frame_resized, point, radius, (0, 255, 255), -1)
-            # Menggambar garis antar keypoints
+        if self.display:
+            if keypoint_positions:
+                for x, y, color in coords:
+                    cv2.line(frame_resized, x, y, color, 2)
+                for keypoints_list in keypoint_positions:
+                    for idx, point in enumerate(keypoints_list):
+                        if point is not None:
+                            if idx == 9 or idx == 10:
+                                radius = 10  # Radius lebih besar untuk titik 9 dan 10
+                            else:
+                                radius = 3  # Radius default
+                            cv2.circle(frame_resized, point, radius, (0, 255, 255), -1)
+                # Menggambar garis antar keypoints
 
         overlay = frame_resized.copy()
         alpha = 0.5
@@ -434,7 +440,7 @@ class CarpalDetector:
             self.elapsed_time = current_time - self.first_green_time
             minutes, seconds = divmod(int(self.elapsed_time), 60)
             time_str = f"Elapsed Time: {minutes:02d}:{seconds:02d}"
-            if self.show_text:
+            if self.show_text and self.display:
                 cvzone.putTextRect(frame_resized, time_str, (10, self.new_height - 100), scale=1, thickness=2, offset=5)
 
         return frame_resized
@@ -539,9 +545,10 @@ class CarpalDetector:
         process_every_n_frames = 2
         frame_count = 0
 
-        window_name = f"BROOM{self.idx} : {self.camera_name}"
-        cv2.namedWindow(window_name, cv2.WINDOW_NORMAL)
-        cv2.resizeWindow(window_name, self.window_width, self.window_height)
+        if self.display:
+            window_name = f"CARPAL{self.idx} : {self.camera_name}"
+            cv2.namedWindow(window_name, cv2.WINDOW_NORMAL)
+            cv2.resizeWindow(window_name, self.window_width, self.window_height)
 
         if self.is_local_file:
             # Local video file, process frames in the main thread
@@ -570,26 +577,34 @@ class CarpalDetector:
                 green_borders = sum(1 for state in self.border_states.values() if state["is_green"])
                 percentage_green = (green_borders / total_borders) * 100
                 frame_resized = self.process_frame(frame, current_time, percentage_green, pairs_human)
-                if self.show_text:
-                    cvzone.putTextRect(
-                        frame_resized,
-                        f"Percentage of Green Border: {percentage_green:.2f}%",
-                        (10, self.new_height - 50),
-                        scale=1,
-                        thickness=2,
-                        offset=5,
-                    )
-                    cvzone.putTextRect(frame_resized, f"FPS: {int(self.fps)}", (10, self.new_height - 75), scale=1, thickness=2, offset=5)
-                cv2.imshow(window_name, frame_resized)
+                if self.display:
+                    if self.show_text:
+                        cvzone.putTextRect(
+                            frame_resized,
+                            f"Percentage of Green Border: {percentage_green:.2f}%",
+                            (10, self.new_height - 50),
+                            scale=1,
+                            thickness=2,
+                            offset=5,
+                        )
+                        cvzone.putTextRect(frame_resized, f"FPS: {int(self.fps)}", (10, self.new_height - 75), scale=1, thickness=2, offset=5)
+                    cv2.imshow(window_name, frame_resized)
+                    key = cv2.waitKey(1) & 0xFF
+                    if key == ord("n"):
+                        break
+                    elif key == ord("s"):
+                        self.show_text = not self.show_text
+                else:
+                    # Jika display=False, tambahkan delay kecil
+                    time.sleep(0.01)
+
                 processing_time = (time.time() - start_time) * 1000  # Convert to milliseconds
                 adjusted_delay = max(int(frame_delay - processing_time), 1)
-                key = cv2.waitKey(adjusted_delay) & 0xFF
-                if key == ord("n"):
-                    break
-                elif key == ord("s"):
-                    self.show_text = not self.show_text
+                # Jika display=False, tidak perlu memanggil cv2.waitKey()
+
             cap.release()
-            cv2.destroyAllWindows()
+            if self.display:
+                cv2.destroyAllWindows()
         else:
             # RTSP stream, use frame capture thread
             self.frame_thread = threading.Thread(target=self.frame_capture)
@@ -619,28 +634,34 @@ class CarpalDetector:
                 green_borders = sum(1 for state in self.border_states.values() if state["is_green"])
                 percentage_green = (green_borders / total_borders) * 100
                 frame_resized = self.process_frame(frame, current_time, percentage_green, pairs_human)
-                if self.show_text:
-                    cvzone.putTextRect(
-                        frame_resized,
-                        f"Percentage of Green Border: {percentage_green:.2f}%",
-                        (10, self.new_height - 50),
-                        scale=1,
-                        thickness=2,
-                        offset=5,
-                    )
-                    cvzone.putTextRect(frame_resized, f"FPS: {int(self.fps)}", (10, self.new_height - 75), scale=1, thickness=2, offset=5)
-                cv2.imshow(window_name, frame_resized)
-                key = cv2.waitKey(1) & 0xFF
-                if key == ord("n"):
-                    self.stop_event.set()
-                    break
-                elif key == ord("s"):
-                    self.show_text = not self.show_text
-            cv2.destroyAllWindows()
+                if self.display:
+                    if self.show_text:
+                        cvzone.putTextRect(
+                            frame_resized,
+                            f"Percentage of Green Border: {percentage_green:.2f}%",
+                            (10, self.new_height - 50),
+                            scale=1,
+                            thickness=2,
+                            offset=5,
+                        )
+                        cvzone.putTextRect(frame_resized, f"FPS: {int(self.fps)}", (10, self.new_height - 75), scale=1, thickness=2, offset=5)
+                    cv2.imshow(window_name, frame_resized)
+                    key = cv2.waitKey(1) & 0xFF
+                    if key == ord("n"):
+                        self.stop_event.set()
+                        break
+                    elif key == ord("s"):
+                        self.show_text = not self.show_text
+                else:
+                    # Jika display=False, tambahkan delay kecil
+                    time.sleep(0.01)
+
+            if self.display:
+                cv2.destroyAllWindows()
             self.frame_thread.join()
 
 
-def run_carpal(CARPAL_ABSENCE_THRESHOLD, CARPAL_TOUCH_THRESHOLD, CARPAL_PERCENTAGE_GREEN_THRESHOLD, camera_name, window_size=(540, 360), rtsp_url=None):
+def run_carpal(CARPAL_ABSENCE_THRESHOLD, CARPAL_TOUCH_THRESHOLD, CARPAL_PERCENTAGE_GREEN_THRESHOLD, camera_name, window_size=(540, 360), rtsp_url=None, display=False):
     detector = CarpalDetector(
         CARPAL_ABSENCE_THRESHOLD=CARPAL_ABSENCE_THRESHOLD,
         CARPAL_TOUCH_THRESHOLD=CARPAL_TOUCH_THRESHOLD,
@@ -648,6 +669,7 @@ def run_carpal(CARPAL_ABSENCE_THRESHOLD, CARPAL_TOUCH_THRESHOLD, CARPAL_PERCENTA
         camera_name=camera_name,
         window_size=window_size,
         rtsp_url=rtsp_url,
+        display=display,  # Tambahkan parameter display di sini
     )
 
     detector.main()
@@ -661,4 +683,5 @@ if __name__ == "__main__":
         camera_name="OFFICE1",
         window_size=(540, 360),
         rtsp_url="D:/NWR/videos/UJI/carpal lorong office.mp4",
+        display=False,  # Set display sesuai kebutuhan
     )
