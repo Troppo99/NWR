@@ -326,7 +326,7 @@ class BroomDetector:
         os.makedirs(os.path.dirname(image_path), exist_ok=True)
         cv2.imwrite(image_path, frame_resized)
         # Send data to server
-        self.send_to_server(percentage, current_time, image_path)
+        self.send_to_server(percentage, image_path)
 
     def send_to_server(self, percentage, image_path, host="10.5.0.2"):
         def server_address(host):
@@ -340,6 +340,8 @@ class BroomDetector:
                 password = "robot123"
                 database = "report_ai_cctv"
                 port = 3307
+            else:
+                raise ValueError(f"Invalid host: {host}")
             return user, password, database, port
 
         try:
