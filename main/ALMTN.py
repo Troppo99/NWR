@@ -25,6 +25,7 @@ class MotorDetector:
         new_size=(960, 540),
         rtsp_url=None,
         window_size=(540, 360),
+        display=False,
     ):
         self.MOTOR_CONFIDENCE_THRESHOLD = MOTOR_CONFIDENCE_THRESHOLD
         self.MOTOR_ABSENCE_THRESHOLD = MOTOR_ABSENCE_THRESHOLD
@@ -95,6 +96,9 @@ class MotorDetector:
         self.motor_model = YOLO(motor_model).to("cuda")
         self.motor_model.overrides["verbose"] = False
         print(f"Model Motor device: {next(self.motor_model.model.parameters()).device}")
+        self.display = display
+        if self.display is False:
+            print(f">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>\n\tDisplay tidak dijalankan!\n<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<")
 
     def camera_config(self):
         config = {
@@ -424,10 +428,10 @@ class MotorDetector:
                 border_colors.append((0, 255, 0))
 
         # Drawing boxes and overlays
-        if boxes_info:
-            for x1, y1, x2, y2, conf, class_id in boxes_info:
-                # Draw bounding boxes
-                cvzone.cornerRect(frame_resized, (x1, y1, x2 - x1, y2 - y1), l=10, t=2, colorR=(0, 255, 255), colorC=(255, 255, 255))
+        if self.display:
+            if boxes_info:
+                for x1, y1, x2, y2, conf, class_id in boxes_info:
+                    cvzone.cornerRect(frame_resized, (x1, y1, x2 - x1, y2 - y1), l=10, t=2, colorR=(0, 255, 255), colorC=(255, 255, 255))
 
         overlay = frame_resized.copy()
         alpha = 0.5
@@ -442,22 +446,24 @@ class MotorDetector:
                     elapsed_time = current_time - state["first_yellow_time"]
                     minutes, seconds = divmod(int(elapsed_time), 60)
                     time_str = f"Border {border_id}: {minutes:02d}:{seconds:02d}"
-                    cvzone.putTextRect(
-                        frame_resized,
-                        time_str,
-                        (10, self.new_height - 100 - 25 * border_id),
-                        scale=1,
-                        thickness=2,
-                        offset=5,
-                    )
-            cvzone.putTextRect(
-                frame_resized,
-                f"FPS: {int(self.fps)}",
-                (10, self.new_height - 75),
-                scale=1,
-                thickness=2,
-                offset=5,
-            )
+                    if self.display:
+                        cvzone.putTextRect(
+                            frame_resized,
+                            time_str,
+                            (10, self.new_height - 100 - 25 * border_id),
+                            scale=1,
+                            thickness=2,
+                            offset=5,
+                        )
+            if self.display:
+                cvzone.putTextRect(
+                    frame_resized,
+                    f"FPS: {int(self.fps)}",
+                    (10, self.new_height - 75),
+                    scale=1,
+                    thickness=2,
+                    offset=5,
+                )
 
         return frame_resized
 
@@ -465,9 +471,10 @@ class MotorDetector:
         process_every_n_frames = 2
         frame_count = 0
 
-        window_name = f"MOTOR{self.idx} : {self.camera_name}"
-        cv2.namedWindow(window_name, cv2.WINDOW_NORMAL)
-        cv2.resizeWindow(window_name, self.window_width, self.window_height)
+        if self.display:
+            window_name = f"MOTOR{self.idx} : {self.camera_name}"
+            cv2.namedWindow(window_name, cv2.WINDOW_NORMAL)
+            cv2.resizeWindow(window_name, self.window_width, self.window_height)
 
         if self.video_fps is not None:
             # Local video file, process frames in the main thread
@@ -492,16 +499,17 @@ class MotorDetector:
                     self.fps = 0
                 self.prev_frame_time = current_time
                 frame_resized = self.process_frame(frame, current_time)
-                if self.show_text:
-                    cvzone.putTextRect(
-                        frame_resized,
-                        f"FPS: {int(self.fps)}",
-                        (10, self.new_height - 75),
-                        scale=1,
-                        thickness=2,
-                        offset=5,
-                    )
-                cv2.imshow(window_name, frame_resized)
+                if self.display:
+                    if self.show_text:
+                        cvzone.putTextRect(
+                            frame_resized,
+                            f"FPS: {int(self.fps)}",
+                            (10, self.new_height - 75),
+                            scale=1,
+                            thickness=2,
+                            offset=5,
+                        )
+                    cv2.imshow(window_name, frame_resized)
                 processing_time = (time.time() - start_time) * 1000  # Convert to milliseconds
                 adjusted_delay = max(int(frame_delay - processing_time), 1)
                 key = cv2.waitKey(adjusted_delay) & 0xFF
@@ -537,16 +545,17 @@ class MotorDetector:
                     self.fps = 0
                 self.prev_frame_time = current_time
                 frame_resized = self.process_frame(frame, current_time)
-                if self.show_text:
-                    cvzone.putTextRect(
-                        frame_resized,
-                        f"FPS: {int(self.fps)}",
-                        (10, self.new_height - 75),
-                        scale=1,
-                        thickness=2,
-                        offset=5,
-                    )
-                cv2.imshow(window_name, frame_resized)
+                if self.display:
+                    if self.show_text:
+                        cvzone.putTextRect(
+                            frame_resized,
+                            f"FPS: {int(self.fps)}",
+                            (10, self.new_height - 75),
+                            scale=1,
+                            thickness=2,
+                            offset=5,
+                        )
+                    cv2.imshow(window_name, frame_resized)
                 key = cv2.waitKey(1) & 0xFF
                 if key == ord("n"):
                     self.stop_event.set()
@@ -557,7 +566,7 @@ class MotorDetector:
             self.frame_thread.join()
 
 
-def run_motor(MOTOR_ABSENCE_THRESHOLD, MOTOR_TOUCH_THRESHOLD, MOTOR_CONFIDENCE_THRESHOLD, camera_name, window_size=(540, 360), rtsp_url=None):
+def run_motor(MOTOR_ABSENCE_THRESHOLD, MOTOR_TOUCH_THRESHOLD, MOTOR_CONFIDENCE_THRESHOLD, camera_name, window_size=(540, 360), rtsp_url=None, display=False):
     detector = MotorDetector(
         MOTOR_ABSENCE_THRESHOLD=MOTOR_ABSENCE_THRESHOLD,
         MOTOR_TOUCH_THRESHOLD=MOTOR_TOUCH_THRESHOLD,
@@ -565,6 +574,7 @@ def run_motor(MOTOR_ABSENCE_THRESHOLD, MOTOR_TOUCH_THRESHOLD, MOTOR_CONFIDENCE_T
         camera_name=camera_name,
         window_size=window_size,
         rtsp_url=rtsp_url,
+        display=display,
     )
 
     detector.main()
@@ -578,4 +588,5 @@ if __name__ == "__main__":
         camera_name="EXPEDISI2",
         window_size=(540, 360),
         # rtsp_url="videos/1028(2).mp4",
+        # display=False,
     )
