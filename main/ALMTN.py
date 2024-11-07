@@ -566,7 +566,7 @@ class MotorDetector:
             self.frame_thread.join()
 
 
-def run_motor(MOTOR_ABSENCE_THRESHOLD, MOTOR_TOUCH_THRESHOLD, MOTOR_CONFIDENCE_THRESHOLD, camera_name, window_size=(540, 360), rtsp_url=None, display=False):
+def run_motor(camera_name,MOTOR_ABSENCE_THRESHOLD=300, MOTOR_TOUCH_THRESHOLD=60, MOTOR_CONFIDENCE_THRESHOLD=0, window_size=(320, 240), rtsp_url=None, display=True):
     detector = MotorDetector(
         MOTOR_ABSENCE_THRESHOLD=MOTOR_ABSENCE_THRESHOLD,
         MOTOR_TOUCH_THRESHOLD=MOTOR_TOUCH_THRESHOLD,
@@ -582,11 +582,11 @@ def run_motor(MOTOR_ABSENCE_THRESHOLD, MOTOR_TOUCH_THRESHOLD, MOTOR_CONFIDENCE_T
 
 if __name__ == "__main__":
     run_motor(
-        MOTOR_ABSENCE_THRESHOLD=3,
-        MOTOR_TOUCH_THRESHOLD=3,
-        MOTOR_CONFIDENCE_THRESHOLD=0,
+        # MOTOR_ABSENCE_THRESHOLD=3,
+        # MOTOR_TOUCH_THRESHOLD=3,
+        # MOTOR_CONFIDENCE_THRESHOLD=0,
         camera_name="EXPEDISI2",
-        window_size=(540, 360),
-        # rtsp_url="videos/1028(2).mp4",
-        # display=False,
+        # window_size=(540, 360),
+        # # rtsp_url="videos/1028(2).mp4",
+        # # display=False,
     )

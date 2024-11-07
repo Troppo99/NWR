@@ -661,7 +661,7 @@ class CarpalDetector:
             self.frame_thread.join()
 
 
-def run_carpal(CARPAL_ABSENCE_THRESHOLD, CARPAL_TOUCH_THRESHOLD, CARPAL_PERCENTAGE_GREEN_THRESHOLD, camera_name, window_size=(540, 360), rtsp_url=None, display=False):
+def run_carpal(camera_name,CARPAL_ABSENCE_THRESHOLD=30, CARPAL_TOUCH_THRESHOLD=0, CARPAL_PERCENTAGE_GREEN_THRESHOLD=50, window_size=(320, 240), rtsp_url=None, display=True):
     detector = CarpalDetector(
         CARPAL_ABSENCE_THRESHOLD=CARPAL_ABSENCE_THRESHOLD,
         CARPAL_TOUCH_THRESHOLD=CARPAL_TOUCH_THRESHOLD,
@@ -677,11 +677,11 @@ def run_carpal(CARPAL_ABSENCE_THRESHOLD, CARPAL_TOUCH_THRESHOLD, CARPAL_PERCENTA
 
 if __name__ == "__main__":
     run_carpal(
-        CARPAL_ABSENCE_THRESHOLD=30,
-        CARPAL_TOUCH_THRESHOLD=0,
-        CARPAL_PERCENTAGE_GREEN_THRESHOLD=50,
+        # CARPAL_ABSENCE_THRESHOLD=30,
+        # CARPAL_TOUCH_THRESHOLD=0,
+        # CARPAL_PERCENTAGE_GREEN_THRESHOLD=50,
         camera_name="OFFICE1",
-        window_size=(540, 360),
-        rtsp_url="D:/NWR/videos/UJI/carpal lorong office.mp4",
-        display=False,  # Set display sesuai kebutuhan
+        # window_size=(540, 360),
+        # rtsp_url="D:/NWR/videos/UJI/carpal lorong office.mp4",
+        # display=False,  # Set display sesuai kebutuhan
     )

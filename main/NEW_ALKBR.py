@@ -515,7 +515,7 @@ class BroomDetector:
             self.frame_thread.join()
 
 
-def run_broom(camera_name, window_size=(540, 360), rtsp_url=None):
+def run_broom(camera_name, window_size=(320, 240), rtsp_url=None):
     detector = BroomDetector(
         camera_name=camera_name,
         rtsp_url=rtsp_url,
@@ -527,7 +527,7 @@ def run_broom(camera_name, window_size=(540, 360), rtsp_url=None):
 if __name__ == "__main__":
     run_broom(
         camera_name="SEWING1",
-        window_size=(980, 600),
+        # window_size=(980, 600),
         # rtsp_url="D:/NWR/videos/test/broom_test_0002.mp4",
         # rtsp_url="videos/brooming1.mp4",
     )
