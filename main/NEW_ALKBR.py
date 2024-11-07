@@ -76,38 +76,76 @@ class BroomDetector:
 
     def camera_config(self):
         config = {
+            # OFFICE
             "OFFICE1": {
-                "borders": [],
+                "borders": [[(688, 93), (791, 96), (845, 275), (872, 383), (905, 536), (933, 712), (591, 712), (633, 443), (662, 254), (688, 93)]],
                 "ip": "10.5.0.170",
             },
             "OFFICE2": {
-                "borders": [
-                    [
-                        (24, 496),
-                        (107, 442),
-                        (134, 492),
-                        (264, 416),
-                        (250, 358),
-                        (503, 232),
-                        (633, 309),
-                        (783, 233),
-                        (1028, 369),
-                        (1073, 328),
-                        (1244, 442),
-                        (1207, 541),
-                        (1153, 642),
-                        (1105, 718),
-                        (319, 718),
-                        (179, 538),
-                        (71, 603),
-                        (24, 496),
-                    ]
-                ],
+                "borders": [[(24, 496), (107, 442), (134, 492), (264, 416), (250, 358), (503, 232), (633, 309), (783, 233), (1028, 369), (1073, 328), (1244, 442), (1207, 541), (1153, 642), (1105, 718), (319, 718), (179, 538), (71, 603), (24, 496)]],
                 "ip": "10.5.0.182",
             },
             "OFFICE3": {
-                "borders": [],
+                "borders": [[(160, 411), (127, 572), (109, 716), (601, 716), (590, 462), (1121, 418), (1163, 248), (1030, 94), (936, 3), (500, 3), (484, 176), (476, 403), (160, 411)]],
                 "ip": "10.5.0.161",
+            },
+            # LINE
+            "SEWING1": {
+                "borders": [[(397, 715), (991, 715), (961, 555), (908, 348), (852, 186), (793, 43), (777, 2), (608, 1), (568, 110), (569, 180), (560, 194), (536, 195), (445, 493), (397, 715)]],
+                "ip": "10.5.0.201",
+            },
+            "SEWING2": {
+                "borders": [[(623, 60), (698, 60), (733, 202), (786, 494), (914, 486), (943, 581), (803, 597), (818, 714), (569, 714), (575, 607), (430, 605), (448, 504), (581, 505), (623, 60)]],
+                "ip": "10.5.0.217",
+            },
+            "SEWING3": {
+                "borders": [[(561, 76), (652, 79), (673, 478), (1002, 479), (1273, 472), (1276, 544), (1006, 577), (679, 584), (683, 714), (433, 714), (454, 567), (381, 560), (407, 459), (471, 464), (512, 251), (561, 76)]],
+                "ip": "10.5.0.214",
+            },
+            "SEWING4": {
+                "borders": [[(584, 40), (672, 41), (686, 128), (683, 210), (706, 211), (739, 406), (776, 718), (480, 718), (508, 466), (559, 170), (584, 40)]],
+                "ip": "10.5.0.146",
+            },
+            "SEWING5": {
+                "borders": [[(628, 107), (698, 107), (759, 442), (873, 436), (905, 555), (872, 562), (878, 586), (780, 598), (795, 712), (582, 712), (586, 601), (526, 601), (549, 452), (595, 452), (614, 250), (628, 107)]],
+                "ip": "10.5.0.252",
+            },
+            "SEWING6": {
+                "borders": [[(631, 205), (696, 206), (724, 360), (756, 569), (775, 710), (567, 710), (625, 225), (631, 205)]],
+                "ip": "10.5.0.159",
+            },
+            "SEWING8": {
+                "borders": [[(115, 540), (51, 638), (166, 665), (340, 691), (596, 704), (804, 691), (879, 681), (841, 539), (781, 544), (698, 174), (629, 174), (605, 553), (405, 559), (115, 540)]],
+                "ip": "10.5.0.219",
+            },
+            "SEWINGBACK1": {
+                "borders": [[(726, 312), (831, 316), (835, 335), (835, 335), (846, 334), (935, 581), (974, 718), (504, 718), (497, 659), (291, 617), (248, 676), (88, 627), (168, 544), (363, 585), (560, 612), (711, 622), (726, 312)]],
+                "ip": "10.5.0.183",
+            },
+            "SEWINGBACK2": {
+                "borders": [[(663, 258), (815, 255), (873, 431), (915, 575), (951, 718), (536, 719), (663, 258)]],
+                "ip": "10.5.0.195",
+            },
+            "LINEMANUAL10": {
+                "borders": [[(555, 235), (624, 235), (697, 716), (504, 717), (526, 451), (555, 235)]],
+                "ip": "10.5.0.205",
+            },
+            "LINEMANUAL14": {
+                "borders": [[(634, 145), (722, 147), (780, 371), (850, 717), (526, 717), (587, 367), (634, 145)]],
+                "ip": "10.5.0.202",
+            },
+            "LINEMANUAL15": {
+                "borders": [[(93, 517), (189, 533), (163, 579), (308, 600), (495, 616), (782, 614), (802, 718), (233, 718), (101, 684), (62, 560), (93, 517)]],
+                "ip": "10.5.0.207",
+            },
+            # GUDANG
+            "GUDANGACC1": {
+                "borders": [[(698, 95), (819, 126), (864, 281), (902, 451), (926, 594), (938, 716), (680, 716), (695, 368), (698, 95)]],
+                "ip": "10.5.0.110",
+            },
+            "GUDANGACC4": {
+                "borders": [[(512, 94), (735, 84), (811, 287), (876, 492), (930, 715), (318, 714), (368, 500), (427, 316), (512, 94)]],
+                "ip": "10.5.0.180",
             },
         }
         if self.camera_name not in config:
@@ -304,11 +342,33 @@ class BroomDetector:
                 self.start_no_overlap_time_high = None
 
         # Condition when overlap percentage < 80%
+        elif percentage >= 50:
+            if not overlap_detected:
+                if self.start_no_overlap_time_low is None:
+                    self.start_no_overlap_time_low = current_time
+                elif current_time - self.start_no_overlap_time_low >= 20:
+                    # Reset polygons
+                    self.union_polygon = None
+                    self.total_area = 0
+                    self.start_no_overlap_time_low = None
+            else:
+                self.start_no_overlap_time_low = None
+        elif percentage >= 10:
+            if not overlap_detected:
+                if self.start_no_overlap_time_low is None:
+                    self.start_no_overlap_time_low = current_time
+                elif current_time - self.start_no_overlap_time_low >= 10:
+                    # Reset polygons
+                    self.union_polygon = None
+                    self.total_area = 0
+                    self.start_no_overlap_time_low = None
+            else:
+                self.start_no_overlap_time_low = None
         else:
             if not overlap_detected:
                 if self.start_no_overlap_time_low is None:
                     self.start_no_overlap_time_low = current_time
-                elif current_time - self.start_no_overlap_time_low >= 30:
+                elif current_time - self.start_no_overlap_time_low >= 3:
                     # Reset polygons
                     self.union_polygon = None
                     self.total_area = 0
@@ -466,8 +526,8 @@ def run_broom(camera_name, window_size=(540, 360), rtsp_url=None):
 
 if __name__ == "__main__":
     run_broom(
-        camera_name="OFFICE2",
-        window_size=(960, 540),
+        camera_name="SEWING1",
+        window_size=(980, 600),
         # rtsp_url="D:/NWR/videos/test/broom_test_0002.mp4",
-        rtsp_url="videos/brooming1.mp4",
+        # rtsp_url="videos/brooming1.mp4",
     )
