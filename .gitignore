@@ -1,6 +1,6 @@
 .conda/*
 .vscode/*
-# .draft.py
+.draft.py
 main/images/*
 run/*
 videos/*
