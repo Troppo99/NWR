@@ -8,7 +8,7 @@ import time
 import torch
 import cvzone
 import pymysql
-from datetime import datetime, timedelta
+from datetime import datetime
 import threading
 import queue
 import math
@@ -37,9 +37,6 @@ class CarpalDetector:
         self.CARPAL_PERCENTAGE_GREEN_THRESHOLD = CARPAL_PERCENTAGE_GREEN_THRESHOLD
         self.window_width, self.window_height = window_size
         self.new_width, self.new_height = new_size
-        self.scale_x = self.new_width / 1280
-        self.scale_y = self.new_height / 720
-        self.scaled_borders = []
         self.start_time = None
         self.end_time = None
         self.elapsed_time = None
@@ -53,7 +50,7 @@ class CarpalDetector:
         self.rtsp_url = rtsp_url
         self.video_fps = None
         self.is_local_file = False
-        self.borders, self.ip_camera, self.idx = self.camera_config()
+        self.borders, self.ip_camera = self.camera_config()
 
         if self.display is False:
             print(f">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>\n\tDisplay tidak dijalankan!\n<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<")
@@ -82,39 +79,8 @@ class CarpalDetector:
         self.stop_event = threading.Event()
         self.frame_thread = None
 
-        for border in self.borders:
-            scaled_border = []
-            for x, y in border:
-                scaled_x = int(x * self.scale_x)
-                scaled_y = int(y * self.scale_y)
-                scaled_border.append((scaled_x, scaled_y))
-            self.scaled_borders.append(scaled_border)
-
-        self.border_states = {
-            idx: {
-                "carpal_time": None,
-                "is_green": False,
-                "carpal_overlap_time": 0.0,
-                "last_carpal_overlap_time": None,
-            }
-            for idx in range(len(self.borders))
-        }
-        self.borders_pts = [np.array(border, np.int32) for border in self.scaled_borders]
-
-        # Create shapely Polygons for borders
-        self.borders_polygons = []
-        for scaled_border in self.scaled_borders:
-            if len(scaled_border) >= 3:
-                polygon = Polygon(scaled_border)
-                if polygon.is_valid:
-                    self.borders_polygons.append(polygon)
-                else:
-                    print("Invalid polygon, skipping.")
-            else:
-                print("Not enough points to form a polygon, skipping.")
-
         # Compute total border area
-        self.total_border_area = sum(border.area for border in self.borders_polygons) if self.borders_polygons else 0
+        self.total_border_area = sum(border.area for border in self.borders) if self.borders else 0
 
         # Initialize union polygon for accumulated overlapping areas
         self.union_polygon = None  # Initialize the union polygon
@@ -138,23 +104,21 @@ class CarpalDetector:
 
     def camera_config(self):
         config = {
-            "OFFICE2": {
-                "borders": [
-                    # Leave borders empty for user to edit later
-                    # Example:
-                    # [(x1, y1), (x2, y2), ..., (xn, yn)],
-                ],
-                "ip": "10.5.0.182",
-            },
             "OFFICE1": {
                 "borders": [
                     [(24, 90), (137, 33), (233, -2), (250, -1), (243, 118), (63, 248), (30, 253), (24, 90)],
                 ],
                 "ip": "10.5.0.170",
             },
+            "OFFICE2": {
+                "borders": [
+                    # Define your borders for OFFICE2 here
+                ],
+                "ip": "10.5.0.182",
+            },
             "OFFICE3": {
                 "borders": [
-                    # Leave borders empty for user to edit later
+                    # Define your borders for OFFICE3 here
                 ],
                 "ip": "10.5.0.161",
             },
@@ -162,12 +126,26 @@ class CarpalDetector:
         if self.camera_name not in config:
             raise ValueError(f"Camera name '{self.camera_name}' not found in configuration.")
 
-        borders = config[self.camera_name]["borders"]
+        original_borders = config[self.camera_name]["borders"]
         ip = config[self.camera_name]["ip"]
-        camera_names = list(config.keys())
-        indices = {name: idx + 1 for idx, name in enumerate(camera_names)}
-        index = indices.get(self.camera_name, 0)
-        return borders, ip, index
+
+        scaled_borders = []
+        for border_group in original_borders:
+            scaled_group = []
+            for x, y in border_group:
+                scaled_x = int(x * (self.new_width / 1280))
+                scaled_y = int(y * (self.new_height / 720))
+                scaled_group.append((scaled_x, scaled_y))
+            if len(scaled_group) >= 3:
+                polygon = Polygon(scaled_group)
+                if polygon.is_valid:
+                    scaled_borders.append(polygon)
+                else:
+                    print(f"Invalid polygon for camera {self.camera_name}, skipping.")
+            else:
+                print(f"Not enough points to form a polygon for camera {self.camera_name}, skipping.")
+
+        return scaled_borders, ip
 
     def process_model(self, frame):
         with torch.no_grad():
@@ -274,6 +252,16 @@ class CarpalDetector:
                     cv2.fillPoly(overlay, [coords], (0, 255, 0))
         cv2.addWeighted(overlay, 0.5, frame, 0.5, 0, frame)
 
+    def draw_borders(self, frame):
+        if not self.borders:
+            return
+        for border_polygon in self.borders:
+            if border_polygon.geom_type != "Polygon":
+                continue
+            pts = np.array(border_polygon.exterior.coords, np.int32)
+            pts = pts.reshape((-1, 1, 2))
+            cv2.polylines(frame, [pts], isClosed=True, color=(0, 255, 255), thickness=2)
+
     def process_frame(self, frame, current_time, pairs_human):
         frame_resized = cv2.resize(frame, (self.new_width, self.new_height))
         results = self.process_model(frame_resized)
@@ -290,7 +278,7 @@ class CarpalDetector:
                         kp_x, kp_y = kp
                         # Create a small polygon around the keypoint
                         kp_polygon = self.keypoint_to_polygon(kp_x, kp_y, size=5)
-                        for border_polygon in self.borders_polygons:
+                        for border_polygon in self.borders:
                             if kp_polygon.intersects(border_polygon):
                                 intersection = kp_polygon.intersection(border_polygon)
                                 if not intersection.is_empty:
@@ -302,13 +290,7 @@ class CarpalDetector:
         percentage = (self.total_area / self.total_border_area) * 100 if self.total_border_area > 0 else 0
 
         self.draw_segments(frame_resized)
-
-        # Draw borders
-        overlay = frame_resized.copy()
-        alpha = 0.5
-        for border_pt in self.borders_pts:
-            cv2.polylines(overlay, [border_pt], isClosed=True, color=(0, 255, 255), thickness=2)
-        cv2.addWeighted(overlay, alpha, frame_resized, 1 - alpha, 0, frame_resized)
+        self.draw_borders(frame_resized)
 
         # Draw keypoints and lines
         if self.display:
@@ -525,7 +507,7 @@ class CarpalDetector:
         frame_count = 0
 
         if self.display:
-            window_name = f"CARPAL{self.idx} : {self.camera_name}"
+            window_name = f"CARPAL : {self.camera_name}"
             cv2.namedWindow(window_name, cv2.WINDOW_NORMAL)
             cv2.resizeWindow(window_name, self.window_width, self.window_height)
 
@@ -552,9 +534,6 @@ class CarpalDetector:
                     self.fps = 0
                 self.prev_frame_time = current_time
 
-                total_borders = len(self.borders)
-                green_borders = sum(1 for state in self.border_states.values() if state["is_green"])
-                percentage_green = (green_borders / total_borders) * 100 if total_borders > 0 else 0
                 frame_resized = self.process_frame(frame, current_time, pairs_human)
                 if self.display:
                     cv2.imshow(window_name, frame_resized)
@@ -597,9 +576,6 @@ class CarpalDetector:
                     self.fps = 0
                 self.prev_frame_time = current_time
 
-                total_borders = len(self.borders)
-                green_borders = sum(1 for state in self.border_states.values() if state["is_green"])
-                percentage_green = (green_borders / total_borders) * 100 if total_borders > 0 else 0
                 frame_resized = self.process_frame(frame, current_time, pairs_human)
                 if self.display:
                     cv2.imshow(window_name, frame_resized)
