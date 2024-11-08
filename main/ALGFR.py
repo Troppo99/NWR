@@ -181,6 +181,15 @@ class CarpalDetector:
                 ],
                 "ip": "10.5.0.161",
             },
+            "HALAMAN1": {
+                "borders": [
+                    [(613, 192), (607, 287), (824, 320), (828, 207), (613, 192)],
+                    [(854, 208), (1139, 243), (1131, 375), (851, 325), (854, 208)],
+                    [(482, 193), (479, 270), (585, 284), (589, 192), (482, 193)],
+                    [(1162, 250), (1277, 270), (1277, 404), (1156, 379), (1162, 250)],
+                ],
+                "ip": "10.5.0.236",
+            },
         }
         borders = config[self.camera_name]["borders"]
         ip = config[self.camera_name]["ip"]
@@ -466,12 +475,6 @@ class CarpalDetector:
             table = "empbro"
             category = "Mengelap Kaca"
             camera_name = self.camera_name
-            if camera_name == "10.5.0.182":
-                camera_name = "OFFICE2"
-            elif camera_name == "10.5.0.170":
-                camera_name = "OFFICE1"
-            elif camera_name == "10.5.0.161":
-                camera_name = "OFFICE3"
             timestamp_done = datetime.now()
             timestamp_start = timestamp_done - timedelta(seconds=elapsed_time)
 
@@ -661,7 +664,7 @@ class CarpalDetector:
             self.frame_thread.join()
 
 
-def run_carpal(camera_name,CARPAL_ABSENCE_THRESHOLD=30, CARPAL_TOUCH_THRESHOLD=0, CARPAL_PERCENTAGE_GREEN_THRESHOLD=50, window_size=(320, 240), rtsp_url=None, display=True):
+def run_carpal(camera_name, CARPAL_ABSENCE_THRESHOLD=30, CARPAL_TOUCH_THRESHOLD=0, CARPAL_PERCENTAGE_GREEN_THRESHOLD=50, window_size=(320, 240), rtsp_url=None, display=True):
     detector = CarpalDetector(
         CARPAL_ABSENCE_THRESHOLD=CARPAL_ABSENCE_THRESHOLD,
         CARPAL_TOUCH_THRESHOLD=CARPAL_TOUCH_THRESHOLD,
@@ -677,11 +680,11 @@ def run_carpal(camera_name,CARPAL_ABSENCE_THRESHOLD=30, CARPAL_TOUCH_THRESHOLD=0
 
 if __name__ == "__main__":
     run_carpal(
-        # CARPAL_ABSENCE_THRESHOLD=30,
-        # CARPAL_TOUCH_THRESHOLD=0,
-        # CARPAL_PERCENTAGE_GREEN_THRESHOLD=50,
-        camera_name="OFFICE1",
+        CARPAL_ABSENCE_THRESHOLD=30,
+        CARPAL_TOUCH_THRESHOLD=0,
+        CARPAL_PERCENTAGE_GREEN_THRESHOLD=50,
+        camera_name="OFFICE2",
         # window_size=(540, 360),
-        # rtsp_url="D:/NWR/videos/UJI/carpal lorong office.mp4",
-        # display=False,  # Set display sesuai kebutuhan
+        rtsp_url="D:/NWR/videos/UJI/carpal lorong office.mp4",
+        display=True,  # Set display sesuai kebutuhan
     )
