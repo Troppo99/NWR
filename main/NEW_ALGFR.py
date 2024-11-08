@@ -20,9 +20,6 @@ from shapely.geometry import JOIN_STYLE
 class CarpalDetector:
     def __init__(
         self,
-        CARPAL_ABSENCE_THRESHOLD=10,
-        CARPAL_TOUCH_THRESHOLD=0,
-        CARPAL_PERCENTAGE_GREEN_THRESHOLD=50,
         CARPAL_CONFIDENCE_THRESHOLD=0.5,
         carpal_model="yolo11l-pose.pt",
         camera_name=None,
@@ -32,9 +29,6 @@ class CarpalDetector:
         display=False,
     ):
         self.CARPAL_CONFIDENCE_THRESHOLD = CARPAL_CONFIDENCE_THRESHOLD
-        self.CARPAL_ABSENCE_THRESHOLD = CARPAL_ABSENCE_THRESHOLD
-        self.CARPAL_TOUCH_THRESHOLD = CARPAL_TOUCH_THRESHOLD
-        self.CARPAL_PERCENTAGE_GREEN_THRESHOLD = CARPAL_PERCENTAGE_GREEN_THRESHOLD
         self.window_width, self.window_height = window_size
         self.new_width, self.new_height = new_size
         self.start_time = None
@@ -606,17 +600,11 @@ class CarpalDetector:
 
 def run_carpal(
     camera_name,
-    CARPAL_ABSENCE_THRESHOLD=30,
-    CARPAL_TOUCH_THRESHOLD=0,
-    CARPAL_PERCENTAGE_GREEN_THRESHOLD=50,
     window_size=(320, 240),
     rtsp_url=None,
     display=True,
 ):
     detector = CarpalDetector(
-        CARPAL_ABSENCE_THRESHOLD=CARPAL_ABSENCE_THRESHOLD,
-        CARPAL_TOUCH_THRESHOLD=CARPAL_TOUCH_THRESHOLD,
-        CARPAL_PERCENTAGE_GREEN_THRESHOLD=CARPAL_PERCENTAGE_GREEN_THRESHOLD,
         camera_name=camera_name,
         window_size=window_size,
         rtsp_url=rtsp_url,
@@ -627,9 +615,6 @@ def run_carpal(
 
 if __name__ == "__main__":
     run_carpal(
-        CARPAL_ABSENCE_THRESHOLD=30,
-        CARPAL_TOUCH_THRESHOLD=0,
-        CARPAL_PERCENTAGE_GREEN_THRESHOLD=50,
         camera_name="OFFICE1",
         rtsp_url="D:/NWR/videos/UJI/carpal lorong office.mp4",
         display=True,
