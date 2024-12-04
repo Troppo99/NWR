@@ -8,11 +8,8 @@ import time
 
 class AnomalyDetection:
     def __init__(self):
-        self.rois = [
-            [(57, 465), (225, 430), (236, 514), (220, 557), (78, 594)],
-            [(387, 758), (472, 734), (480, 820), (393, 850)],
-        ]
-        # self.rois = [[(int(x * 3200 / 1280), int(y * 1800 / 720)) for (x, y) in [(501, 275), (803, 318), (1263, 398), (1262, 684), (1053, 678), (1049, 630), (898, 629), (325, 409), (497, 364)]]]
+        self.rois = [[(57, 465), (225, 430), (236, 514), (220, 557), (78, 594)], [(387, 758), (472, 734), (480, 820), (393, 850)]]
+        # self.rois = [[(1252, 687), (2007, 795), (3157, 995), (3155, 1710), (2632, 1695), (2622, 1575), (2245, 1572), (812, 1022), (1242, 910)]]
         self.reference_img = cv2.imread("D:/NWR/sources/AlFaruq/media/room0.jpg")
         self.cap = cv2.VideoCapture("rtsp://admin:oracle2015@192.168.100.65:554/Streaming/Channels/1")
         # self.cap = cv2.VideoCapture("C:/Users/Public/iVMS-4200 Site/UserData/Video/Camera_01_10.5.0.111_10.5.0.111_20241203141002/Camera_01_10.5.0.111_10.5.0.111_20241203075308_20241203075410_21256616.mp4")
@@ -143,7 +140,7 @@ class AnomalyDetection:
                         (cx, cy, cw, ch) = cv2.boundingRect(contour)
                         cv2.rectangle(output, (x + cx, y + cy), (x + cx + cw, y + cy + ch), (0, 0, 255), 2)
 
-            scale_percent = 20
+            scale_percent = 40
             width = int(frame.shape[1] * scale_percent / 100)
             height = int(frame.shape[0] * scale_percent / 100)
             dim = (width, height)
