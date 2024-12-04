@@ -11,13 +11,15 @@ from PyQt6.QtCore import Qt, QTimer
 
 class AnomalyDetection(threading.Thread):
     def __init__(self):
-        threading.Thread.__init__(self)
+        super().__init__()
         self.rois = [[(57, 465), (225, 430), (236, 514), (220, 557), (78, 594)], [(387, 758), (472, 734), (480, 820), (393, 850)]]
         # self.rois = [[(1252, 687), (2007, 795), (3157, 995), (3155, 1710), (2632, 1695), (2622, 1575), (2245, 1572), (812, 1022), (1242, 910)]]
         self.reference_img = cv2.imread("D:/NWR/sources/AlFaruq/media/room0.jpg")
         self.cap = cv2.VideoCapture("rtsp://admin:oracle2015@192.168.100.65:554/Streaming/Channels/1")
         # self.cap = cv2.VideoCapture("C:/Users/Public/iVMS-4200 Site/UserData/Video/Camera_01_10.5.0.111_10.5.0.111_20241203141002/Camera_01_10.5.0.111_10.5.0.111_20241203075308_20241203075410_21256616.mp4")
         ret, frame = self.cap.read()
+        if not ret:
+            raise ValueError("Tidak dapat membaca frame dari sumber video.")
         self.frame_height, self.frame_width = frame.shape[:2]
         self.reference_img = cv2.resize(self.reference_img, (self.frame_width, self.frame_height))
         self.cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
@@ -37,7 +39,8 @@ class AnomalyDetection(threading.Thread):
             cropped_mask = self.create_polygon_mask((h, w), cropped_polygon)
             self.precomputed_masks.append(cropped_mask)
 
-        self.frame_queue = queue.Queue(maxsize=10)
+        self.capture_queue = queue.Queue(maxsize=10)
+        self.process_queue = queue.Queue(maxsize=10)
         self.stop_event = threading.Event()
         self.frame_counter = 0
         self.frame_count = 0
@@ -104,7 +107,7 @@ class AnomalyDetection(threading.Thread):
                 continue
 
             try:
-                self.frame_queue.put(frame, timeout=1)
+                self.capture_queue.put(frame, timeout=1)
             except queue.Full:
                 print("Frame queue penuh. Melewati frame.")
                 continue
@@ -112,7 +115,7 @@ class AnomalyDetection(threading.Thread):
     def process_frames(self):
         while not self.stop_event.is_set():
             try:
-                frame = self.frame_queue.get(timeout=1)
+                frame = self.capture_queue.get(timeout=1)
             except queue.Empty:
                 continue
 
@@ -159,7 +162,9 @@ class AnomalyDetection(threading.Thread):
             display_height = int(concatenated_images.shape[0] * display_scale_percent / 100)
             concatenated_images = cv2.resize(concatenated_images, (display_width, display_height))
 
+            # Tampilkan di jendela OpenCV (opsional)
             cv2.imshow("Comparison", concatenated_images)
+
             self.frame_count += 1
             if self.frame_count % 30 == 0:
                 elapsed_time = time.time() - self.start_time
@@ -169,9 +174,21 @@ class AnomalyDetection(threading.Thread):
             if cv2.waitKey(1) & 0xFF == ord("n"):
                 self.stop_event.set()
                 break
-            self.emit(frame, output)
+
+            # Masukkan frame yang telah diproses ke antrean proses
+            try:
+                self.process_queue.put((frame, output), timeout=1)
+            except queue.Full:
+                print("Process queue penuh. Melewati frame.")
+
+    def get_frame(self):
+        try:
+            return self.process_queue.get_nowait()
+        except queue.Empty:
+            return None, None
 
     def run(self):
+        self.stop_event.clear()
         capture_thread = threading.Thread(target=self.capture_frames)
         capture_thread.start()
         self.process_frames()
@@ -182,7 +199,6 @@ class MainWindow(QWidget):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Anomaly Detection")
-
         self.ad = AnomalyDetection()
         self.ad.start()
 
@@ -192,7 +208,7 @@ class MainWindow(QWidget):
         self.show_reference_button = QPushButton("Show Reference")
         self.show_reference_button.clicked.connect(self.toggle_reference)
 
-        self.run_stop_button = QPushButton("Run")
+        self.run_stop_button = QPushButton("Stop")
         self.run_stop_button.clicked.connect(self.toggle_running)
 
         layout = QVBoxLayout()
@@ -217,19 +233,24 @@ class MainWindow(QWidget):
             self.ad.stop_event.set()
             self.run_stop_button.setText("Run")
         else:
-            self.ad.stop_event.clear()
-            self.ad.run()
+            if not self.ad.is_alive():
+                self.ad = AnomalyDetection()
+                self.ad.start()
+            else:
+                self.ad.stop_event.clear()
             self.run_stop_button.setText("Stop")
         self.ad.running = not self.ad.running
 
     def update_video(self):
         frame, output = self.ad.get_frame()
-        if frame is not None:
+        if frame is not None and output is not None:
             if self.show_reference:
-                output = np.hstack((self.ad.reference_display, output))
-            height, width, channel = output.shape
+                combined = np.hstack((self.ad.reference_display, output))
+            else:
+                combined = output
+            height, width, channel = combined.shape
             bytes_per_line = 3 * width
-            q_img = QImage(output.data, width, height, bytes_per_line, QImage.Format.Format_RGB888).rgbSwapped()
+            q_img = QImage(combined.data, width, height, bytes_per_line, QImage.Format.Format_RGB888).rgbSwapped()
             pixmap = QPixmap.fromImage(q_img)
             self.video_label.setPixmap(pixmap)
 
