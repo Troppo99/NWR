@@ -4,7 +4,7 @@ from skimage.metrics import structural_similarity as ssim
 import threading
 import queue
 import time
-from PyQt6.QtWidgets import QApplication, QWidget, QLabel, QPushButton, QVBoxLayout, QHBoxLayout
+from PyQt6.QtWidgets import QApplication, QWidget, QLabel, QPushButton, QVBoxLayout, QHBoxLayout, QGridLayout
 from PyQt6.QtGui import QImage, QPixmap
 from PyQt6.QtCore import Qt, QTimer
 
@@ -148,23 +148,7 @@ class AnomalyDetection(threading.Thread):
                         (cx, cy, cw, ch) = cv2.boundingRect(contour)
                         cv2.rectangle(output, (x + cx, y + cy), (x + cx + cw, y + cy + ch), (0, 0, 255), 2)
 
-            scale_percent = 40
-            width = int(frame.shape[1] * scale_percent / 100)
-            height = int(frame.shape[0] * scale_percent / 100)
-            dim = (width, height)
-
-            ref_resized = cv2.resize(self.reference_display, dim, interpolation=cv2.INTER_AREA)
-            target_resized = cv2.resize(frame, dim, interpolation=cv2.INTER_AREA)
-            output_resized = cv2.resize(output, dim, interpolation=cv2.INTER_AREA)
-            concatenated_images = cv2.hconcat([ref_resized, target_resized, output_resized])
-            display_scale_percent = 80
-            display_width = int(concatenated_images.shape[1] * display_scale_percent / 100)
-            display_height = int(concatenated_images.shape[0] * display_scale_percent / 100)
-            concatenated_images = cv2.resize(concatenated_images, (display_width, display_height))
-
-            # Tampilkan di jendela OpenCV (opsional)
-            cv2.imshow("Comparison", concatenated_images)
-
+            # Update FPS
             self.frame_count += 1
             if self.frame_count % 30 == 0:
                 elapsed_time = time.time() - self.start_time
@@ -199,34 +183,94 @@ class MainWindow(QWidget):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Anomaly Detection")
+        self.setFixedSize(1280, 720)  # Tetapkan ukuran tetap 1280x720
+
         self.ad = AnomalyDetection()
         self.ad.start()
 
+        # QLabel untuk menampilkan video
         self.video_label = QLabel()
         self.video_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.video_label.setStyleSheet("background-color: black;")
 
+        # QLabel untuk menampilkan gambar referensi
+        self.reference_label = QLabel()
+        self.reference_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.reference_label.setStyleSheet("background-color: gray;")
+        self.reference_label.setVisible(False)  # Sembunyikan secara default
+
+        # Tombol untuk menampilkan/menyembunyikan referensi
         self.show_reference_button = QPushButton("Show Reference")
         self.show_reference_button.clicked.connect(self.toggle_reference)
 
+        # Tombol untuk menjalankan/menghentikan deteksi
         self.run_stop_button = QPushButton("Stop")
         self.run_stop_button.clicked.connect(self.toggle_running)
 
-        layout = QVBoxLayout()
-        layout.addWidget(self.video_label)
+        # Layout grid
+        self.grid_layout = QGridLayout()
+        self.grid_layout.setContentsMargins(5, 5, 5, 5)
+        self.grid_layout.setSpacing(5)
+
+        # Tambahkan video_label ke grid, spanning 2 kolom awalnya
+        self.grid_layout.addWidget(self.video_label, 0, 0, 1, 2)
+        # Tambahkan reference_label ke grid, tetapi sembunyikan
+        self.grid_layout.addWidget(self.reference_label, 1, 0, 1, 2)
+
+        # Layout untuk tombol
         button_layout = QHBoxLayout()
         button_layout.addWidget(self.show_reference_button)
         button_layout.addWidget(self.run_stop_button)
-        layout.addLayout(button_layout)
-        self.setLayout(layout)
 
+        # Layout utama
+        main_layout = QVBoxLayout()
+        main_layout.addLayout(self.grid_layout)
+        main_layout.addLayout(button_layout)
+        self.setLayout(main_layout)
+
+        # Timer untuk memperbarui video
         self.timer = QTimer()
         self.timer.timeout.connect(self.update_video)
-        self.timer.start(30)
+        self.timer.start(30)  # Update setiap 30 ms (~33 FPS)
 
-        self.show_reference = True
+        self.show_reference = False
 
     def toggle_reference(self):
         self.show_reference = not self.show_reference
+        if self.show_reference:
+            # Ubah layout: video_label dan reference_label dalam grid 2x2
+            self.grid_layout.removeWidget(self.video_label)
+            self.video_label.setParent(None)
+            self.grid_layout.removeWidget(self.reference_label)
+            self.reference_label.setParent(None)
+
+            # Tambahkan video_label dan reference_label ke grid 2x2
+            self.grid_layout.addWidget(self.video_label, 0, 0, 1, 1)
+            self.grid_layout.addWidget(self.reference_label, 0, 1, 1, 1)
+
+            # Atur ulang reference_label
+            ref_image = self.ad.reference_display
+            height, width, channel = ref_image.shape
+            bytes_per_line = 3 * width
+            q_img = QImage(ref_image.data, width, height, bytes_per_line, QImage.Format.Format_RGB888).rgbSwapped()
+            pixmap = QPixmap.fromImage(q_img)
+            self.reference_label.setPixmap(pixmap.scaled(self.reference_label.size(), Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation))
+            self.reference_label.setVisible(True)
+
+            self.show_reference_button.setText("Hide Reference")
+        else:
+            # Ubah layout kembali ke single view
+            self.grid_layout.removeWidget(self.video_label)
+            self.video_label.setParent(None)
+            self.grid_layout.removeWidget(self.reference_label)
+            self.reference_label.setParent(None)
+
+            # Tambahkan video_label spanning 2 kolom
+            self.grid_layout.addWidget(self.video_label, 0, 0, 1, 2)
+            self.grid_layout.addWidget(self.reference_label, 1, 0, 1, 2)
+            self.reference_label.setVisible(False)
+
+            self.show_reference_button.setText("Show Reference")
 
     def toggle_running(self):
         if self.ad.running:
@@ -244,15 +288,26 @@ class MainWindow(QWidget):
     def update_video(self):
         frame, output = self.ad.get_frame()
         if frame is not None and output is not None:
-            if self.show_reference:
-                combined = np.hstack((self.ad.reference_display, output))
-            else:
-                combined = output
-            height, width, channel = combined.shape
+            # Tampilkan output frame
+            display_frame = output
+
+            # Resize frame untuk menyesuaikan QLabel tanpa mengubah resolusi internal
+            height, width, channel = display_frame.shape
             bytes_per_line = 3 * width
-            q_img = QImage(combined.data, width, height, bytes_per_line, QImage.Format.Format_RGB888).rgbSwapped()
+            q_img = QImage(display_frame.data, width, height, bytes_per_line, QImage.Format.Format_RGB888).rgbSwapped()
             pixmap = QPixmap.fromImage(q_img)
-            self.video_label.setPixmap(pixmap)
+            scaled_pixmap = pixmap.scaled(self.video_label.size(), Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
+            self.video_label.setPixmap(scaled_pixmap)
+
+            if self.show_reference:
+                # Tampilkan gambar referensi di reference_label (sudah diatur saat toggle_reference)
+                pass
+
+    def closeEvent(self, event):
+        # Pastikan thread berhenti saat window ditutup
+        self.ad.stop_event.set()
+        self.ad.join()
+        event.accept()
 
 
 if __name__ == "__main__":
