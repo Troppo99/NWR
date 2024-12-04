@@ -4,10 +4,14 @@ from skimage.metrics import structural_similarity as ssim
 import threading
 import queue
 import time
+from PyQt6.QtWidgets import QApplication, QWidget, QLabel, QPushButton, QVBoxLayout, QHBoxLayout
+from PyQt6.QtGui import QImage, QPixmap
+from PyQt6.QtCore import Qt, QTimer
 
 
-class AnomalyDetection:
+class AnomalyDetection(threading.Thread):
     def __init__(self):
+        threading.Thread.__init__(self)
         self.rois = [[(57, 465), (225, 430), (236, 514), (220, 557), (78, 594)], [(387, 758), (472, 734), (480, 820), (393, 850)]]
         # self.rois = [[(1252, 687), (2007, 795), (3157, 995), (3155, 1710), (2632, 1695), (2622, 1575), (2245, 1572), (812, 1022), (1242, 910)]]
         self.reference_img = cv2.imread("D:/NWR/sources/AlFaruq/media/room0.jpg")
@@ -38,6 +42,7 @@ class AnomalyDetection:
         self.frame_counter = 0
         self.frame_count = 0
         self.start_time = time.time()
+        self.running = False
 
     def create_polygon_mask(self, image_shape, polygon):
         mask = np.zeros(image_shape, dtype=np.uint8)
@@ -164,16 +169,73 @@ class AnomalyDetection:
             if cv2.waitKey(1) & 0xFF == ord("n"):
                 self.stop_event.set()
                 break
+            self.emit(frame, output)
 
     def run(self):
         capture_thread = threading.Thread(target=self.capture_frames)
         capture_thread.start()
-        processing_thread = threading.Thread(target=self.process_frames)
-        processing_thread.start()
+        self.process_frames()
         capture_thread.join()
-        processing_thread.join()
+
+
+class MainWindow(QWidget):
+    def __init__(self):
+        super().__init__()
+        self.setWindowTitle("Anomaly Detection")
+
+        self.ad = AnomalyDetection()
+        self.ad.start()
+
+        self.video_label = QLabel()
+        self.video_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+
+        self.show_reference_button = QPushButton("Show Reference")
+        self.show_reference_button.clicked.connect(self.toggle_reference)
+
+        self.run_stop_button = QPushButton("Run")
+        self.run_stop_button.clicked.connect(self.toggle_running)
+
+        layout = QVBoxLayout()
+        layout.addWidget(self.video_label)
+        button_layout = QHBoxLayout()
+        button_layout.addWidget(self.show_reference_button)
+        button_layout.addWidget(self.run_stop_button)
+        layout.addLayout(button_layout)
+        self.setLayout(layout)
+
+        self.timer = QTimer()
+        self.timer.timeout.connect(self.update_video)
+        self.timer.start(30)
+
+        self.show_reference = True
+
+    def toggle_reference(self):
+        self.show_reference = not self.show_reference
+
+    def toggle_running(self):
+        if self.ad.running:
+            self.ad.stop_event.set()
+            self.run_stop_button.setText("Run")
+        else:
+            self.ad.stop_event.clear()
+            self.ad.run()
+            self.run_stop_button.setText("Stop")
+        self.ad.running = not self.ad.running
+
+    def update_video(self):
+        frame, output = self.ad.get_frame()
+        if frame is not None:
+            if self.show_reference:
+                output = np.hstack((self.ad.reference_display, output))
+            height, width, channel = output.shape
+            bytes_per_line = 3 * width
+            q_img = QImage(output.data, width, height, bytes_per_line, QImage.Format.Format_RGB888).rgbSwapped()
+            pixmap = QPixmap.fromImage(q_img)
+            self.video_label.setPixmap(pixmap)
 
 
 if __name__ == "__main__":
-    ad = AnomalyDetection()
-    ad.run()
+    app = QApplication([])
+    window = MainWindow()
+    window.show()
+    app.exec()
