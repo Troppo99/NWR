@@ -7,6 +7,7 @@ import numpy as np
 import time
 import threading
 import queue
+import subprocess
 from PyQt6.QtWidgets import QApplication, QMainWindow, QLabel, QWidget, QGridLayout, QScrollArea
 from PyQt6.QtGui import QPixmap, QImage
 from PyQt6.QtCore import Qt, QThread, pyqtSignal
@@ -15,17 +16,25 @@ import cvzone
 import torch
 
 
+def get_ffmpeg_process(rtsp_url, width=640, height=360):
+    # Perintah FFmpeg untuk mentranskode stream ke H.264, resize, dan output sebagai raw BGR24
+    command = ["ffmpeg", "-i", rtsp_url, "-vf", f"scale={width}:{height}", "-c:v", "rawvideo", "-pix_fmt", "bgr24", "-f", "rawvideo", "-"]  # Resize frame
+    return subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, bufsize=10**8)
+
+
 class PaperDetector(QThread):
     change_pixmap_signal = pyqtSignal(np.ndarray)
 
-    def __init__(self, rtsp_url, camera_name):
+    def __init__(self, rtsp_url, camera_name, width=640, height=360):
         super().__init__()
         self.rtsp_url = rtsp_url
         self.camera_name = camera_name
+        self.width = width
+        self.height = height
         self._run_flag = True
         self.frame_queue = queue.Queue(maxsize=10)
         self.stop_event = threading.Event()
-        self.model = YOLO("D:/NWR/run/paper/ONE&TWO/weights/best.pt").to("cuda")
+        self.model = YOLO("D:/NWR/run/paper/THREE/weights/best.pt").to("cuda")
         self.model.overrides["verbose"] = False
         print(f"Model device: {next(self.model.model.parameters()).device}")
 
@@ -35,6 +44,9 @@ class PaperDetector(QThread):
         self.original_border_color = (255, 255, 0)  # Biru muda
         # Warna border ketika overlapping lebih dari 5 detik
         self.alert_border_color = (0, 0, 255)  # Merah
+
+        # Inisialisasi FFmpeg process
+        self.ffmpeg_process = get_ffmpeg_process(self.rtsp_url, self.width, self.height)
 
     def export_frame(self, results):
         boxes_info = []
@@ -62,28 +74,38 @@ class PaperDetector(QThread):
             alpha_mask = alpha_mask[:h, :w]
         img[y : y + h, x : x + w] = (img[y : y + h, x : x + w] * (1 - alpha_mask[:, :, None]) + img_overlay * alpha_mask[:, :, None]).astype(np.uint8)
 
+    def is_valid_frame(self, frame):
+        # Contoh validasi: cek variansi warna
+        variance = np.var(frame)
+        if variance < 100:  # Threshold ini bisa disesuaikan
+            return False
+        return True
+
     def process_frame(self, frame):
+        # Pastikan frame dapat dimodifikasi
+        frame = frame.copy()
+
         results = self.process_model(frame)
         boxes_info = self.export_frame(results)
 
         # Definisikan border untuk masing-masing kamera
         border_camera1 = [
-            [(int(x * 3200 / 1280), int(y * 1800 / 720)) for (x, y) in [(1022, 400), (1101, 405), (1151, 546), (1013, 552), (1013, 552), (1043, 443)]],
-            [(int(x * 3200 / 1280), int(y * 1800 / 720)) for (x, y) in [(440, 347), (573, 354), (559, 417), (559, 535), (364, 516)]],
-            [(int(x * 3200 / 1280), int(y * 1800 / 720)) for (x, y) in [(219, 329), (116, 473), (116, 473), (241, 500), (340, 341)]],
-            [(int(x * 3200 / 1280), int(y * 1800 / 720)) for (x, y) in [(71, 322), (1, 409), (1, 449), (49, 458), (153, 331)]],
-            [(int(x * 3200 / 1280), int(y * 1800 / 720)) for (x, y) in [(301, 121), (360, 118), (320, 152), (256, 157), (256, 157)]],
-            [(int(x * 3200 / 1280), int(y * 1800 / 720)) for (x, y) in [(423, 109), (501, 110), (460, 152), (381, 150), (381, 150)]],
-            [(int(x * 3200 / 1280), int(y * 1800 / 720)) for (x, y) in [(580, 109), (556, 152), (556, 152), (650, 157), (653, 114)]],
+            [(int(x * self.width / 1280), int(y * self.height / 720)) for (x, y) in [(1022, 400), (1101, 405), (1151, 546), (1013, 552), (1013, 552), (1043, 443)]],
+            [(int(x * self.width / 1280), int(y * self.height / 720)) for (x, y) in [(440, 347), (573, 354), (559, 417), (559, 535), (364, 516)]],
+            [(int(x * self.width / 1280), int(y * self.height / 720)) for (x, y) in [(219, 329), (116, 473), (116, 473), (241, 500), (340, 341)]],
+            [(int(x * self.width / 1280), int(y * self.height / 720)) for (x, y) in [(71, 322), (1, 409), (1, 449), (49, 458), (153, 331)]],
+            [(int(x * self.width / 1280), int(y * self.height / 720)) for (x, y) in [(301, 121), (360, 118), (320, 152), (256, 157), (256, 157)]],
+            [(int(x * self.width / 1280), int(y * self.height / 720)) for (x, y) in [(423, 109), (501, 110), (460, 152), (381, 150), (381, 150)]],
+            [(int(x * self.width / 1280), int(y * self.height / 720)) for (x, y) in [(580, 109), (556, 152), (556, 152), (650, 157), (653, 114)]],
         ]
 
         border_camera2 = [
-            [(int(x * 3200 / 1280), int(y * 1800 / 720)) for (x, y) in [(576, 74), (691, 99), (689, 184), (538, 148)]],
-            [(int(x * 3200 / 1280), int(y * 1800 / 720)) for (x, y) in [(538, 148), (689, 184), (683, 335), (491, 292)]],
-            [(int(x * 3200 / 1280), int(y * 1800 / 720)) for (x, y) in [(460, 422), (685, 469), (673, 723), (386, 718)]],
+            [(int(x * self.width / 1280), int(y * self.height / 720)) for (x, y) in [(576, 74), (691, 99), (689, 184), (538, 148)]],
+            [(int(x * self.width / 1280), int(y * self.height / 720)) for (x, y) in [(538, 148), (689, 184), (683, 335), (491, 292)]],
+            [(int(x * self.width / 1280), int(y * self.height / 720)) for (x, y) in [(460, 422), (685, 469), (673, 723), (386, 718)]],
         ]
 
-        border_camera3 = [[(int(x * 3200 / 1280), int(y * 1800 / 720)) for (x, y) in [(1072, 511), (1174, 490), (1257, 708), (1219, 719), (1141, 719)]]]
+        border_camera3 = [[(int(x * self.width / 1280), int(y * self.height / 720)) for (x, y) in [(1072, 511), (1174, 490), (1257, 708), (1219, 719), (1141, 719)]]]
 
         # Tentukan apakah kamera adalah Camera1 atau Camera2
         if self.camera_name == "OFFICE1":
@@ -112,7 +134,7 @@ class PaperDetector(QThread):
                 if self.overlap_check_single_border(x1, y1, x2, y2, border):
                     overlap = True
                     # Gambarkan bounding box (opsional)
-                    cvzone.cornerRect(frame, (x1, y1, x2 - x1, y2 - y1), rt=0, colorC=(0, 255, 255))
+                    cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 255), 1)
                     break  # Tidak perlu mengecek lebih lanjut jika sudah ada overlap
 
             # Update status overlapping
@@ -151,17 +173,18 @@ class PaperDetector(QThread):
                 color = (55, 205, 0)  # Hijau untuk "Clear"
 
             # Gambarkan border dengan warna sesuai status
-            cv2.polylines(frame, [np.array(border)], True, border_info["current_color"], 10)
+            try:
+                cv2.polylines(frame, [np.array(border)], True, border_info["current_color"], 2)
+            except Exception as e:
+                print(f"{self.camera_name} : Error drawing polylines: {e}")
 
             # Tentukan posisi untuk teks (misalnya, pada titik pertama border)
             text_position = border[0]
 
             # Tambahkan teks pada frame
-            cvzone.putTextRect(frame, text, text_position, colorT=(255, 255, 255), scale=3, thickness=3, offset=3, colorR=color)
+            cvzone.putTextRect(frame, text, text_position, colorT=(255, 255, 255), scale=1, thickness=2, offset=3, colorR=color)
 
-        # Jika ingin menambahkan informasi deteksi objek di luar konteks border, Anda bisa tetap melakukannya di sini
-        # Namun, sesuai permintaan Anda, kita hanya fokus pada status border
-
+        # Kembalikan frame yang telah diproses
         return frame
 
     def overlap_check_single_border(self, x1, y1, x2, y2, border):
@@ -176,27 +199,33 @@ class PaperDetector(QThread):
         return False
 
     def frame_capture(self):
-        rtsp_url = self.rtsp_url
+        ffmpeg = self.ffmpeg_process
+        frame_size = self.width * self.height * 3  # 640 * 360 * 3
         while not self.stop_event.is_set():
-            cap = cv2.VideoCapture(rtsp_url)
-            if not cap.isOpened():
-                print(f"{self.camera_name} : Failed to open stream. Retrying in 5 seconds...")
-                cap.release()
-                time.sleep(5)
+            # Baca frame dari stdout FFmpeg
+            raw_frame = ffmpeg.stdout.read(frame_size)
+            if len(raw_frame) != frame_size:
+                # Baca stderr FFmpeg untuk melihat error
+                stderr_output = ffmpeg.stderr.read(1024).decode("utf-8")
+                print(f"{self.camera_name} : Failed to read frame from FFmpeg.")
+                print(f"FFmpeg stderr: {stderr_output}")
+                break
+            try:
+                frame = np.frombuffer(raw_frame, np.uint8).reshape((self.height, self.width, 3))
+            except ValueError as e:
+                print(f"{self.camera_name} : Frame reshaping error: {e}")
                 continue
 
-            while not self.stop_event.is_set():
-                ret, frame = cap.read()
-                if not ret:
-                    print(f"{self.camera_name} : Failed to read frame. Reconnecting in 5 seconds...")
-                    cap.release()
-                    time.sleep(5)
-                    break
-                try:
-                    self.frame_queue.put(frame, timeout=1)
-                except queue.Full:
-                    pass
-        cap.release()
+            # Validasi frame
+            if not self.is_valid_frame(frame):
+                print(f"{self.camera_name} : Invalid frame detected.")
+                continue
+
+            try:
+                self.frame_queue.put(frame, timeout=1)
+            except queue.Full:
+                pass
+        ffmpeg.terminate()
 
     def run(self):
         threading.Thread(target=self.frame_capture, daemon=True).start()
@@ -212,6 +241,7 @@ class PaperDetector(QThread):
     def stop(self):
         self._run_flag = False
         self.stop_event.set()
+        self.ffmpeg_process.terminate()
         self.wait()
 
 
@@ -255,7 +285,8 @@ class MainWindow(QMainWindow):
     def start_threads(self):
         for idx, url in enumerate(self.rtsp_urls):
             camera_name = self.camera_names[idx] if idx < len(self.camera_names) else f"Camera{idx+1}"
-            thread = PaperDetector(url, camera_name)
+            # Sesuaikan resolusi sesuai dengan yang diinginkan (640 width)
+            thread = PaperDetector(url, camera_name, width=640, height=360)
             thread.change_pixmap_signal.connect(lambda cv_img, label_index=idx: self.update_image(cv_img, label_index))
             thread.start()
             self.threads.append(thread)

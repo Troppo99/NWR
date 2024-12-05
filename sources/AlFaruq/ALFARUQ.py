@@ -5,17 +5,21 @@ import threading
 import queue
 import time
 import os
-from PyQt6.QtWidgets import QApplication, QWidget, QLabel, QPushButton, QVBoxLayout, QHBoxLayout, QGridLayout, QMessageBox
+from PyQt6.QtWidgets import QApplication, QWidget, QLabel, QPushButton, QVBoxLayout, QHBoxLayout, QGridLayout, QMessageBox, QSlider
 from PyQt6.QtGui import QImage, QPixmap
-from PyQt6.QtCore import Qt, QTimer, QThread, pyqtSignal, pyqtSlot
+from PyQt6.QtCore import Qt, QThread, pyqtSignal, pyqtSlot
 
 
 class AnomalyDetection(QThread):
     # Sinyal untuk mengirim frame yang telah diproses ke GUI
     frame_processed = pyqtSignal(np.ndarray)
 
-    def __init__(self):
+    def __init__(self, video_source="rtsp"):
         super().__init__()
+        # Tetapkan ukuran frame yang diinginkan berdasarkan frame asli
+        self.video_source = video_source
+
+        # ROIs asli sebelum skala (sesuaikan dengan frame asli Anda)
         self.rois = [[(57, 465), (225, 430), (236, 514), (220, 557), (78, 594)], [(387, 758), (472, 734), (480, 820), (393, 850)]]
         # Path folder untuk gambar referensi
         self.reference_folder = "D:/NWR/sources/AlFaruq/media/"
@@ -25,9 +29,15 @@ class AnomalyDetection(QThread):
         if self.reference_img is None:
             raise ValueError(f"Tidak dapat membaca gambar referensi dari {self.reference_path}")
 
-        self.cap = cv2.VideoCapture("rtsp://admin:oracle2015@192.168.100.65:554/Streaming/Channels/1")
-        # Alternatif sumber video lokal
-        # self.cap = cv2.VideoCapture("C:/path/to/local/video.mp4")
+        # Buka sumber video
+        if self.video_source == "rtsp":
+            self.cap = cv2.VideoCapture("rtsp://admin:oracle2015@192.168.100.65:554/Streaming/Channels/1")
+        else:
+            # Ganti dengan path ke video lokal Anda untuk pengujian
+            self.cap = cv2.VideoCapture("C:/path/to/local/video.mp4")  # Ubah sesuai path Anda
+
+        if not self.cap.isOpened():
+            raise ValueError("Tidak dapat membuka sumber video.")
 
         ret, frame = self.cap.read()
         if not ret:
@@ -51,8 +61,7 @@ class AnomalyDetection(QThread):
             cropped_mask = self.create_polygon_mask((h, w), cropped_polygon)
             self.precomputed_masks.append(cropped_mask)
 
-        self.capture_queue = queue.Queue(maxsize=10)
-        self.process_queue = queue.Queue(maxsize=10)
+        self.capture_queue = queue.Queue(maxsize=20)  # Meningkatkan ukuran queue
         self.stop_event = threading.Event()
         self.frame_counter = 0
         self.frame_count = 0
@@ -61,6 +70,9 @@ class AnomalyDetection(QThread):
 
         self.latest_frame = None  # Menyimpan frame terbaru yang diproses
         self.latest_original_frame = None  # Menyimpan frame asli terbaru
+
+        # Sensitivitas default
+        self.sensitivity_threshold = 50  # Nilai default, dapat diubah melalui slider
 
     def create_polygon_mask(self, image_shape, polygon):
         mask = np.zeros(image_shape, dtype=np.uint8)
@@ -76,7 +88,6 @@ class AnomalyDetection(QThread):
             keypoints_ref, descriptors_ref = orb.detectAndCompute(gray_ref, None)
             keypoints_target, descriptors_target = orb.detectAndCompute(gray_target, None)
             if descriptors_ref is None or descriptors_target is None:
-                print("Tidak ditemukan deskriptor dalam salah satu ROI.")
                 return target_roi
 
             matcher = cv2.DescriptorMatcher_create(cv2.DESCRIPTOR_MATCHER_BRUTEFORCE_HAMMING)
@@ -89,7 +100,6 @@ class AnomalyDetection(QThread):
             num_good_matches = int(len(matches) * good_match_percent)
             matches = matches[:num_good_matches]
             if len(matches) < 4:
-                print("Tidak cukup kecocokan untuk menghitung homografi.")
                 return target_roi
 
             points_ref = np.zeros((len(matches), 2), dtype=np.float32)
@@ -173,7 +183,7 @@ class AnomalyDetection(QThread):
                             gray_aligned_roi = cv2.cvtColor(aligned_target_cropped, cv2.COLOR_BGR2GRAY)
                             (score, diff) = ssim(gray_ref_roi, gray_aligned_roi, full=True)
                             diff = (diff * 255).astype("uint8")
-                            thresh = cv2.threshold(diff, 50, 255, cv2.THRESH_BINARY_INV)[1]
+                            thresh = cv2.threshold(diff, self.sensitivity_threshold, 255, cv2.THRESH_BINARY_INV)[1]
                             kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5))
                             thresh = cv2.dilate(thresh, kernel, iterations=2)
                             thresh = cv2.erode(thresh, kernel, iterations=1)
@@ -201,6 +211,10 @@ class AnomalyDetection(QThread):
                 self.frame_processed.emit(output)
         except Exception as e:
             print(f"Error dalam process_frames: {e}")
+
+    def set_sensitivity_threshold(self, value):
+        with self.lock:
+            self.sensitivity_threshold = value
 
     @pyqtSlot(np.ndarray)
     def update_reference_image(self, new_reference_frame):
@@ -238,7 +252,12 @@ class MainWindow(QWidget):
         self.setFixedSize(1280, 720)  # Tetapkan ukuran tetap 1280x720
 
         # Inisialisasi AnomalyDetection sebagai QThread
-        self.ad = AnomalyDetection()
+        try:
+            # Gunakan "rtsp" untuk sumber video RTSP atau "local" untuk sumber video lokal
+            self.ad = AnomalyDetection(video_source="rtsp")  # Ubah menjadi "local" jika menggunakan video lokal
+        except ValueError as e:
+            QMessageBox.critical(self, "Error", str(e))
+            exit()
 
         # Koneksi sinyal frame_processed dari AnomalyDetection ke slot update_video
         self.ad.frame_processed.connect(self.update_video)
@@ -250,11 +269,13 @@ class MainWindow(QWidget):
         self.video_label = QLabel()
         self.video_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.video_label.setStyleSheet("background-color: black;")
+        self.video_label.setFixedSize(640, 360)  # Ukuran tampilan video
 
         # QLabel untuk menampilkan gambar referensi
         self.reference_label = QLabel()
         self.reference_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.reference_label.setStyleSheet("background-color: gray;")
+        self.reference_label.setFixedSize(640, 360)  # Ukuran tampilan referensi
         self.reference_label.setVisible(False)  # Sembunyikan secara default
 
         # Tombol untuk menampilkan/menyembunyikan referensi
@@ -268,6 +289,21 @@ class MainWindow(QWidget):
         # Tombol untuk kalibrasi referensi
         self.calibrate_button = QPushButton("Calibrate")
         self.calibrate_button.clicked.connect(self.calibrate_reference)
+
+        # Tambahkan slider untuk sensitivitas
+        self.sensitivity_slider_label = QLabel("Sensitivity:")
+        self.sensitivity_slider_label.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+        self.sensitivity_slider = QSlider(Qt.Orientation.Horizontal)
+        self.sensitivity_slider.setRange(0, 100)
+        self.sensitivity_slider.setValue(self.ad.sensitivity_threshold)  # Nilai default dari AnomalyDetection
+        self.sensitivity_slider.setTickPosition(QSlider.TickPosition.TicksBelow)
+        self.sensitivity_slider.setTickInterval(10)
+        self.sensitivity_slider.valueChanged.connect(self.update_sensitivity)
+
+        # Layout slider
+        slider_layout = QHBoxLayout()
+        slider_layout.addWidget(self.sensitivity_slider_label)
+        slider_layout.addWidget(self.sensitivity_slider)
 
         # Layout grid
         self.grid_layout = QGridLayout()
@@ -289,6 +325,7 @@ class MainWindow(QWidget):
         main_layout = QVBoxLayout()
         main_layout.addLayout(self.grid_layout)
         main_layout.addLayout(button_layout)
+        main_layout.addLayout(slider_layout)  # Tambahkan layout slider ke main_layout
         self.setLayout(main_layout)
 
         # Variabel untuk menyimpan frame terbaru
@@ -317,7 +354,8 @@ class MainWindow(QWidget):
             bytes_per_line = 3 * width
             q_img = QImage(ref_image.data, width, height, bytes_per_line, QImage.Format.Format_RGB888).rgbSwapped()
             pixmap = QPixmap.fromImage(q_img)
-            self.reference_label.setPixmap(pixmap.scaled(self.reference_label.size(), Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation))
+            scaled_pixmap = pixmap.scaled(self.reference_label.size(), Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
+            self.reference_label.setPixmap(scaled_pixmap)
             self.reference_label.setVisible(True)
 
             self.show_reference_button.setText("Hide Reference")
@@ -345,10 +383,14 @@ class MainWindow(QWidget):
         else:
             # Mulai thread baru jika sudah berhenti
             if not self.ad.isRunning():
-                self.ad = AnomalyDetection()
-                self.ad.frame_processed.connect(self.update_video)
-                self.ad.start()
-                print("Deteksi anomali dimulai.")
+                try:
+                    # Gunakan "rtsp" atau "local" sesuai kebutuhan
+                    self.ad = AnomalyDetection(video_source="rtsp")  # Ubah menjadi "local" jika menggunakan video lokal
+                    self.ad.frame_processed.connect(self.update_video)
+                    self.ad.start()
+                    print("Deteksi anomali dimulai.")
+                except ValueError as e:
+                    QMessageBox.critical(self, "Error", str(e))
             self.run_stop_button.setText("Stop")
         # Tidak perlu menyimpan status running secara manual karena menggunakan isRunning()
 
@@ -384,7 +426,8 @@ class MainWindow(QWidget):
                     bytes_per_line = 3 * width
                     q_img = QImage(ref_image.data, width, height, bytes_per_line, QImage.Format.Format_RGB888).rgbSwapped()
                     pixmap = QPixmap.fromImage(q_img)
-                    self.reference_label.setPixmap(pixmap.scaled(self.reference_label.size(), Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation))
+                    scaled_pixmap = pixmap.scaled(self.reference_label.size(), Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
+                    self.reference_label.setPixmap(scaled_pixmap)
                     print("Reference_label diperbarui dengan gambar baru.")
 
                 QMessageBox.information(self, "Calibrate", "Gambar referensi telah berhasil diperbarui.")
@@ -394,18 +437,23 @@ class MainWindow(QWidget):
         else:
             QMessageBox.warning(self, "Calibrate", "Tidak ada frame yang tersedia untuk kalibrasi.")
 
+    def update_sensitivity(self, value):
+        self.ad.set_sensitivity_threshold(value)
+        print(f"Sensitivity threshold updated to {value}")
+
     @pyqtSlot(np.ndarray)
     def update_video(self, frame):
         try:
             # Simpan frame terbaru untuk kalibrasi
             with self.ad.lock:
                 self.ad.latest_frame = frame.copy()
-                print("latest_frame diperbarui.")
+                # print("latest_frame diperbarui.")
 
-            # Tampilkan frame di video_label
-            height, width, channel = frame.shape
+            # Ubah ukuran frame untuk tampilan (640x360)
+            display_frame = cv2.resize(frame, (640, 360))
+            height, width, channel = display_frame.shape
             bytes_per_line = 3 * width
-            q_img = QImage(frame.data, width, height, bytes_per_line, QImage.Format.Format_RGB888).rgbSwapped()
+            q_img = QImage(display_frame.data, width, height, bytes_per_line, QImage.Format.Format_RGB888).rgbSwapped()
             pixmap = QPixmap.fromImage(q_img)
             scaled_pixmap = pixmap.scaled(self.video_label.size(), Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
             self.video_label.setPixmap(scaled_pixmap)
