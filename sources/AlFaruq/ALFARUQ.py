@@ -16,11 +16,19 @@ class AnomalyDetection(QThread):
 
     def __init__(self, video_source="rtsp"):
         super().__init__()
-        # Tetapkan ukuran frame yang diinginkan berdasarkan frame asli
+        # Tetapkan ukuran frame yang diinginkan
+        self.target_width = 960
+        self.target_height = 540
+
         self.video_source = video_source
 
-        # ROIs asli sebelum skala (sesuaikan dengan frame asli Anda)
-        self.rois = [[(57, 465), (225, 430), (236, 514), (220, 557), (78, 594)], [(387, 758), (472, 734), (480, 820), (393, 850)]]
+        # ROIs asli sebelum skala (didesain untuk 1920x1080)
+        original_rois = [[(57, 465), (225, 430), (236, 514), (220, 557), (78, 594)], [(387, 758), (472, 734), (480, 820), (393, 850)]]
+
+        # Faktor skala akan dihitung setelah mengetahui ukuran asli frame
+        self.scale_x = 1.0
+        self.scale_y = 1.0
+
         # Path folder untuk gambar referensi
         self.reference_folder = "D:/NWR/sources/AlFaruq/media/"
         self.reference_filename = "room0.jpg"
@@ -42,10 +50,21 @@ class AnomalyDetection(QThread):
         ret, frame = self.cap.read()
         if not ret:
             raise ValueError("Tidak dapat membaca frame dari sumber video.")
+
+        # Dapatkan ukuran asli frame
         self.frame_height, self.frame_width = frame.shape[:2]
-        self.reference_img = cv2.resize(self.reference_img, (self.frame_width, self.frame_height))
+
+        # Hitung faktor skala berdasarkan ukuran target
+        self.scale_x = self.target_width / self.frame_width
+        self.scale_y = self.target_height / self.frame_height
+
+        # Ubah ukuran gambar referensi ke ukuran target
+        self.reference_img = cv2.resize(self.reference_img, (self.target_width, self.target_height))
         self.cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
         self.reference_display = self.reference_img.copy()
+        # Skalakan ROIs berdasarkan faktor skala
+        self.rois = [[(int(x * self.scale_x), int(y * self.scale_y)) for (x, y) in roi] for roi in original_rois]
+
         for roi in self.rois:
             cv2.polylines(self.reference_display, [np.array(roi, dtype=np.int32)], isClosed=True, color=(0, 255, 0), thickness=2)
 
@@ -146,8 +165,11 @@ class AnomalyDetection(QThread):
                 if self.frame_counter % 2 != 0:
                     continue
 
+                # Ubah ukuran frame ke target size
+                frame_resized = cv2.resize(frame, (self.target_width, self.target_height))
+
                 try:
-                    self.capture_queue.put(frame, timeout=1)
+                    self.capture_queue.put(frame_resized, timeout=1)
                 except queue.Full:
                     print("Frame queue penuh. Melewati frame.")
                     continue
@@ -220,8 +242,8 @@ class AnomalyDetection(QThread):
     def update_reference_image(self, new_reference_frame):
         try:
             with self.lock:
-                # Resize frame ke ukuran referensi
-                resized_reference = cv2.resize(new_reference_frame, (self.frame_width, self.frame_height))
+                # Resize frame ke ukuran referensi (960x540)
+                resized_reference = cv2.resize(new_reference_frame, (self.target_width, self.target_height))
                 self.reference_img = resized_reference
                 self.reference_display = self.reference_img.copy()
                 for roi in self.rois:

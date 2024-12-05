@@ -1,25 +1,16 @@
-import os
-
-os.environ["KMP_DUPLICATE_LIB_OK"] = "True"
 import sys
 import cv2
 import numpy as np
 import time
 import threading
 import queue
-import subprocess
 from PyQt6.QtWidgets import QApplication, QMainWindow, QLabel, QWidget, QGridLayout, QScrollArea
 from PyQt6.QtGui import QPixmap, QImage
 from PyQt6.QtCore import Qt, QThread, pyqtSignal
 from ultralytics import YOLO
 import cvzone
 import torch
-
-
-def get_ffmpeg_process(rtsp_url, width=640, height=360):
-    # Perintah FFmpeg untuk mentranskode stream ke H.264, resize, dan output sebagai raw BGR24
-    command = ["ffmpeg", "-i", rtsp_url, "-vf", f"scale={width}:{height}", "-c:v", "rawvideo", "-pix_fmt", "bgr24", "-f", "rawvideo", "-"]  # Resize frame
-    return subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, bufsize=10**8)
+import os
 
 
 class PaperDetector(QThread):
@@ -38,15 +29,18 @@ class PaperDetector(QThread):
         self.model.overrides["verbose"] = False
         print(f"Model device: {next(self.model.model.parameters()).device}")
 
-        # Inisialisasi status border
+        # Initialize border status
         self.border_status = {}
-        # Warna asli border
-        self.original_border_color = (255, 255, 0)  # Biru muda
-        # Warna border ketika overlapping lebih dari 5 detik
-        self.alert_border_color = (0, 0, 255)  # Merah
+        # Original border color
+        self.original_border_color = (255, 255, 0)  # Light Blue
+        # Border color when overlapping for more than 5 seconds
+        self.alert_border_color = (0, 0, 255)  # Red
 
-        # Inisialisasi FFmpeg process
-        self.ffmpeg_process = get_ffmpeg_process(self.rtsp_url, self.width, self.height)
+        # Initialize VideoCapture
+        self.cap = cv2.VideoCapture(self.rtsp_url)
+        if not self.cap.isOpened():
+            print(f"{self.camera_name} : Cannot open RTSP stream.")
+            self._run_flag = False
 
     def export_frame(self, results):
         boxes_info = []
@@ -134,7 +128,7 @@ class PaperDetector(QThread):
                 if self.overlap_check_single_border(x1, y1, x2, y2, border):
                     overlap = True
                     # Gambarkan bounding box (opsional)
-                    cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 255), 1)
+                    # cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 255), 1)
                     break  # Tidak perlu mengecek lebih lanjut jika sudah ada overlap
 
             # Update status overlapping
@@ -182,7 +176,7 @@ class PaperDetector(QThread):
             text_position = border[0]
 
             # Tambahkan teks pada frame
-            cvzone.putTextRect(frame, text, text_position, colorT=(255, 255, 255), scale=1, thickness=2, offset=3, colorR=color)
+            cvzone.putTextRect(frame, text, text_position, colorT=(255, 255, 255), scale=0.75, thickness=1, offset=1, colorR=color)
 
         # Kembalikan frame yang telah diproses
         return frame
@@ -192,31 +186,22 @@ class PaperDetector(QThread):
         rect = np.array([[x1, y1], [x2, y1], [x2, y2], [x1, y2]], dtype=np.float32)
         polygon = np.array(border, dtype=np.int32)
         for point in rect:
-            x = float(point[0])
-            y = float(point[1])
+            x, y = float(point[0]), float(point[1])
             if cv2.pointPolygonTest(polygon, (x, y), False) >= 0:
                 return True
         return False
 
     def frame_capture(self):
-        ffmpeg = self.ffmpeg_process
-        frame_size = self.width * self.height * 3  # 640 * 360 * 3
         while not self.stop_event.is_set():
-            # Baca frame dari stdout FFmpeg
-            raw_frame = ffmpeg.stdout.read(frame_size)
-            if len(raw_frame) != frame_size:
-                # Baca stderr FFmpeg untuk melihat error
-                stderr_output = ffmpeg.stderr.read(1024).decode("utf-8")
-                print(f"{self.camera_name} : Failed to read frame from FFmpeg.")
-                print(f"FFmpeg stderr: {stderr_output}")
+            ret, frame = self.cap.read()
+            if not ret:
+                print(f"{self.camera_name} : Failed to read frame from RTSP stream.")
                 break
-            try:
-                frame = np.frombuffer(raw_frame, np.uint8).reshape((self.height, self.width, 3))
-            except ValueError as e:
-                print(f"{self.camera_name} : Frame reshaping error: {e}")
-                continue
 
-            # Validasi frame
+            # Resize frame if necessary
+            frame = cv2.resize(frame, (self.width, self.height))
+
+            # Validate frame
             if not self.is_valid_frame(frame):
                 print(f"{self.camera_name} : Invalid frame detected.")
                 continue
@@ -225,7 +210,8 @@ class PaperDetector(QThread):
                 self.frame_queue.put(frame, timeout=1)
             except queue.Full:
                 pass
-        ffmpeg.terminate()
+
+        self.cap.release()
 
     def run(self):
         threading.Thread(target=self.frame_capture, daemon=True).start()
@@ -241,7 +227,7 @@ class PaperDetector(QThread):
     def stop(self):
         self._run_flag = False
         self.stop_event.set()
-        self.ffmpeg_process.terminate()
+        self.cap.release()
         self.wait()
 
 
@@ -284,8 +270,8 @@ class MainWindow(QMainWindow):
 
     def start_threads(self):
         for idx, url in enumerate(self.rtsp_urls):
-            camera_name = self.camera_names[idx] if idx < len(self.camera_names) else f"Camera{idx+1}"
-            # Sesuaikan resolusi sesuai dengan yang diinginkan (640 width)
+            camera_name = self.camera_names[idx] if idx < len(self.camera_names) else f"Camera{idx + 1}"
+            # Adjust resolution as desired (640 width)
             thread = PaperDetector(url, camera_name, width=640, height=360)
             thread.change_pixmap_signal.connect(lambda cv_img, label_index=idx: self.update_image(cv_img, label_index))
             thread.start()
