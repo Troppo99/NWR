@@ -302,7 +302,7 @@ def main():
         "rtsp://admin:oracle2015@10.5.0.170:554/Streaming/Channels/1",
         "rtsp://admin:oracle2015@10.5.0.110:554/Streaming/Channels/1",
         "rtsp://admin:oracle2015@10.5.0.161:554/Streaming/Channels/1",
-        "rtsp://admin:oracle2015@10.5.0.7:554/Streaming/Channels/1",
+        # "rtsp://admin:oracle2015@10.5.0.7:554/Streaming/Channels/1",
         # Tambahkan RTSP URL lainnya di sini
     ]
     camera_names = [
