@@ -499,7 +499,7 @@ if __name__ == "__main__":
         config = json.load(f)
 
     # Pilih office mana yang hendak digunakan, misalnya "OFFICE1"
-    office_key = "OFFICE3"
+    office_key = "OFFICE2"
 
     # Ambil nilai dari JSON
     reference_filename = config[office_key]["reference_filename"]
