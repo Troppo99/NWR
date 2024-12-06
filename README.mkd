@@ -1,6 +1,6 @@
 AlAdl       : Genangan air
 AlAhad      : Anomali di tembok dengan model
-AlAnkabut   : Debu di atas
+AlAnkabut   : Telapak tangan dan sapu
 AlFaruq     : Anomali di tembok tanpa model
 AlGhaffar   : Telapak tangan
 AlKabir     : Sapu, Pel
