@@ -5,6 +5,8 @@ import threading
 import queue
 import time
 import os
+import json
+import sys
 from PyQt6.QtWidgets import QApplication, QWidget, QLabel, QPushButton, QVBoxLayout, QHBoxLayout, QGridLayout, QMessageBox, QSlider
 from PyQt6.QtGui import QImage, QPixmap
 from PyQt6.QtCore import Qt, QThread, pyqtSignal, pyqtSlot
@@ -14,7 +16,7 @@ class AnomalyDetection(QThread):
     # Sinyal untuk mengirim frame yang telah diproses ke GUI
     frame_processed = pyqtSignal(np.ndarray)
 
-    def __init__(self, video_source="rtsp"):
+    def __init__(self, video_source="rtsp", rois=None, reference_filename=None, ip_camera=None):
         super().__init__()
         # Tetapkan ukuran frame yang diinginkan
         self.target_width = 960
@@ -23,15 +25,14 @@ class AnomalyDetection(QThread):
         self.video_source = video_source
 
         # ROIs asli sebelum skala (didesain untuk 1920x1080)
-        original_rois = [[(57, 465), (225, 430), (236, 514), (220, 557), (78, 594)], [(387, 758), (472, 734), (480, 820), (393, 850)]]
-
+        original_rois = rois
         # Faktor skala akan dihitung setelah mengetahui ukuran asli frame
         self.scale_x = 1.0
         self.scale_y = 1.0
 
         # Path folder untuk gambar referensi
         self.reference_folder = "D:/NWR/sources/AlFaruq/media/"
-        self.reference_filename = "room0.jpg"
+        self.reference_filename = reference_filename
         self.reference_path = os.path.join(self.reference_folder, self.reference_filename)
         self.reference_img = cv2.imread(self.reference_path)
         if self.reference_img is None:
@@ -39,7 +40,7 @@ class AnomalyDetection(QThread):
 
         # Buka sumber video
         if self.video_source == "rtsp":
-            self.cap = cv2.VideoCapture("rtsp://admin:oracle2015@192.168.100.65:554/Streaming/Channels/1")
+            self.cap = cv2.VideoCapture(f"rtsp://admin:oracle2015@{ip_camera}:554/Streaming/Channels/1")
         else:
             # Ganti dengan path ke video lokal Anda untuk pengujian
             self.cap = cv2.VideoCapture("C:/path/to/local/video.mp4")  # Ubah sesuai path Anda
@@ -268,7 +269,7 @@ class AnomalyDetection(QThread):
 
 
 class MainWindow(QWidget):
-    def __init__(self):
+    def __init__(self, rois=None, reference_filename=None, ip_camera=None):
         super().__init__()
         self.setWindowTitle("Anomaly Detection")
         self.setFixedSize(1280, 720)  # Tetapkan ukuran tetap 1280x720
@@ -276,7 +277,7 @@ class MainWindow(QWidget):
         # Inisialisasi AnomalyDetection sebagai QThread
         try:
             # Gunakan "rtsp" untuk sumber video RTSP atau "local" untuk sumber video lokal
-            self.ad = AnomalyDetection(video_source="rtsp")  # Ubah menjadi "local" jika menggunakan video lokal
+            self.ad = AnomalyDetection(video_source="rtsp", rois=rois, reference_filename=reference_filename, ip_camera=ip_camera)  # Ubah menjadi "local" jika menggunakan video lokal
         except ValueError as e:
             QMessageBox.critical(self, "Error", str(e))
             exit()
@@ -491,6 +492,26 @@ class MainWindow(QWidget):
 
 if __name__ == "__main__":
     app = QApplication([])
-    window = MainWindow()
+
+    # Baca file JSON
+    config_path = "sources/AlFaruq/camera_conf.json"
+    with open(config_path, "r") as f:
+        config = json.load(f)
+
+    # Pilih office mana yang hendak digunakan, misalnya "OFFICE1"
+    office_key = "OFFICE3"
+
+    # Ambil nilai dari JSON
+    reference_filename = config[office_key]["reference_filename"]
+    ip_camera = config[office_key]["ip_camera"]
+    rois = config[office_key]["rois"]
+
+    # Inisialisasi MainWindow dengan nilai dari JSON
+    window = MainWindow(
+        rois=rois,
+        reference_filename=reference_filename,
+        ip_camera=ip_camera
+    )
+
     window.show()
-    app.exec()
+    sys.exit(app.exec())
