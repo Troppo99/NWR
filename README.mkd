@@ -3,5 +3,5 @@ AlAhad      : Anomali di tembok dengan model
 AlAnkabut   : Debu di atas
 AlFaruq     : Anomali di tembok tanpa model
 AlGhaffar   : Telapak tangan
-AlKabir     : Sapu, Pel, 
+AlKabir     : Sapu, Pel
 AlWaraq     : Kertas
