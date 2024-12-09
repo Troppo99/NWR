@@ -38,10 +38,6 @@ class BroomDetector:
         if not self.display:
             print(f"B`{self.camera_name} : >>>Display is disabled!<<<")
 
-        # Model dan video seperti kode pertama
-        # self.video_path = "videos/test/cutgine.mp4"
-
-        # Deteksi apakah rtsp_url itu file lokal atau RTSP asli
         self.is_local_file = False
         if rtsp_url is not None:
             self.rtsp_url = rtsp_url
@@ -129,54 +125,39 @@ class BroomDetector:
         return results
 
     def export_frame(self, results):
-        new_polygons = []
+        # Mengembalikan list box dengan flag inside/outside
+        boxes_info = []
         overlap_detected = False
         for result in results:
             for box in result.boxes:
                 x1, y1, x2, y2 = map(int, box.xyxy[0])
                 dp = 0.2
-                x1 = x1 - dp * (x2 - x1)
-                y1 = y1 - dp * (y2 - y1)
-                x2 = x2 + dp * (x2 - x1)
-                y2 = y2 + dp * (y2 - y1)
+                x1_expanded = x1 - dp * (x2 - x1)
+                y1_expanded = y1 - dp * (y2 - y1)
+                x2_expanded = x2 + dp * (x2 - x1)
+                y2_expanded = y2 + dp * (y2 - y1)
                 conf = box.conf[0]
                 if conf > self.BROOM_CONFIDENCE_THRESHOLD:
-                    bbox_polygon = self.box_to_polygon(x1, y1, x2, y2)
+                    bbox_polygon = self.box_to_polygon(x1_expanded, y1_expanded, x2_expanded, y2_expanded)
+                    inside = False
                     for border in self.borders:
                         if bbox_polygon.intersects(border):
                             intersection = bbox_polygon.intersection(border)
                             if not intersection.is_empty:
+                                inside = True
                                 overlap_detected = True
-                                if intersection.geom_type in ["Polygon", "MultiPolygon"]:
-                                    new_polygons.append(intersection)
-        return new_polygons, overlap_detected
+                                break
+                    w = int(x2 - x1)
+                    h = int(y2 - y1)
+                    boxes_info.append((x1, y1, w, h, inside))
+        return boxes_info, overlap_detected
 
     def update_union_polygon(self, new_polygons):
-        if new_polygons:
-            if self.union_polygon is None:
-                self.union_polygon = unary_union(new_polygons)
-            else:
-                self.union_polygon = unary_union([self.union_polygon] + new_polygons)
-            self.union_polygon = self.union_polygon.simplify(tolerance=0.5, preserve_topology=True)
-            if not self.union_polygon.is_valid:
-                self.union_polygon = self.union_polygon.buffer(0, join_style=JOIN_STYLE.mitre)
-            self.total_area = self.union_polygon.area
-
-    def draw_segments(self, frame):
-        overlay = frame.copy()
-        if self.union_polygon is not None and not self.union_polygon.is_empty:
-            if self.union_polygon.geom_type == "Polygon":
-                coords = np.array(self.union_polygon.exterior.coords, np.int32)
-                coords = coords.reshape((-1, 1, 2))
-                cv2.fillPoly(overlay, [coords], (0, 255, 0))
-            elif self.union_polygon.geom_type == "MultiPolygon":
-                for poly in self.union_polygon.geoms:
-                    if poly.is_empty:
-                        continue
-                    coords = np.array(poly.exterior.coords, np.int32)
-                    coords = coords.reshape((-1, 1, 2))
-                    cv2.fillPoly(overlay, [coords], (0, 255, 0))
-        cv2.addWeighted(overlay, 0.5, frame, 0.5, 0, frame)
+        # Sudah tidak dipakai untuk segment hijau, tapi tetap dipertahankan fungsinya
+        # jika diperlukan di kemudian hari.
+        # Disini kita tidak akan membentuk polygon union lagi,
+        # karena user meminta untuk menghapus segment hijau.
+        pass
 
     def draw_borders(self, frame):
         if not self.borders:
@@ -198,27 +179,25 @@ class BroomDetector:
                 self.draw_borders(frame_resized)
                 return frame_resized, False
         results = self.process_model(frame_resized)
-        new_polygons, overlap_detected = self.export_frame(results)
-        self.update_union_polygon(new_polygons)
+        boxes_info, overlap_detected = self.export_frame(results)
+
+        # Jika ada overlap dan belum tercatat waktu mulai, catat
         if overlap_detected and self.timestamp_start is None:
             self.timestamp_start = datetime.now()
 
-        if new_polygons and self.display:
-            for intersection_polygon in new_polygons:
-                if intersection_polygon.geom_type == "Polygon":
-                    x, y, w, h = self.polygon_to_bbox(intersection_polygon)
-                    cvzone.cornerRect(frame_resized, (x, y, w, h), l=10, t=2, colorR=(0, 255, 255), colorC=(255, 255, 255))
-                    area = intersection_polygon.area
-                    cvzone.putTextRect(frame_resized, f"Area: {int(area)}", (x, y - 10), scale=0.5, thickness=1, offset=0, colorR=(0, 255, 255), colorT=(0, 0, 0))
-                elif intersection_polygon.geom_type == "MultiPolygon":
-                    for poly in intersection_polygon.geoms:
-                        x, y, w, h = self.polygon_to_bbox(poly)
-                        cvzone.cornerRect(frame_resized, (x, y, w, h), l=10, t=2, colorR=(0, 255, 255), colorC=(255, 255, 255))
-                        area = poly.area
-                        cvzone.putTextRect(frame_resized, f"Area: {int(area)}", (x, y - 10), scale=0.5, thickness=1, offset=0, colorR=(0, 255, 255), colorT=(0, 0, 0))
+        # Labeling setiap box
         if self.display:
-            self.draw_segments(frame_resized)
             self.draw_borders(frame_resized)
+            for x, y, w, h, inside in boxes_info:
+                if inside:
+                    # Inside border => "Violation!"
+                    cvzone.cornerRect(frame_resized, (x, y, w, h), l=10, t=2, colorR=(0, 255, 255), colorC=(255, 255, 255))
+                    cvzone.putTextRect(frame_resized, "Violation!", (x, y - 10), scale=1, thickness=2, offset=5, colorR=(20, 10, 255), colorT=(255, 255, 255))
+                else:
+                    # Outside border => "Warning!"
+                    cvzone.cornerRect(frame_resized, (x, y, w, h), l=10, t=2, colorR=(0, 0, 128), colorC=(255, 255, 255))
+                    cvzone.putTextRect(frame_resized, "Warning!", (x, y - 10), scale=1, thickness=2, offset=5, colorR=(0, 255, 255), colorT=(0, 0, 0))
+
         return frame_resized, overlap_detected
 
     def box_to_polygon(self, x1, y1, x2, y2):
@@ -365,9 +344,8 @@ class BroomDetector:
                 self.fps = 1 / time_diff if time_diff > 0 else 0
                 self.prev_frame_time = current_time
                 frame_resized, overlap_detected = self.process_frame(frame, current_time)
-                percentage = (self.total_area / self.total_border_area) * 100 if self.total_border_area > 0 else 0
+                percentage = 0  # Tidak diperlukan lagi polygon union, set 0 atau jika perlu
                 if self.display:
-                    cvzone.putTextRect(frame_resized, f"Overlap: {percentage:.2f}%", (10, 50), scale=1, thickness=2, offset=5)
                     cvzone.putTextRect(frame_resized, f"FPS: {int(self.fps)}", (10, 75), scale=1, thickness=2, offset=5)
                 self.check_conditions(percentage, overlap_detected, current_time, frame_resized)
                 if self.display:
@@ -401,9 +379,8 @@ class BroomDetector:
                 self.fps = 1 / time_diff if time_diff > 0 else 0
                 self.prev_frame_time = current_time
                 frame_resized, overlap_detected = self.process_frame(frame, current_time)
-                percentage = (self.total_area / self.total_border_area) * 100 if self.total_border_area > 0 else 0
+                percentage = 0
                 if self.display:
-                    cvzone.putTextRect(frame_resized, f"Overlap: {percentage:.2f}%", (10, 50), scale=1, thickness=2, offset=5)
                     cvzone.putTextRect(frame_resized, f"FPS: {int(self.fps)}", (10, 75), scale=1, thickness=2, offset=5)
                 self.check_conditions(percentage, overlap_detected, current_time, frame_resized)
                 if self.display:
