@@ -13,38 +13,24 @@ from PyQt6.QtCore import Qt, QThread, pyqtSignal, pyqtSlot
 
 
 class AnomalyDetection(QThread):
-    # Sinyal untuk mengirim frame yang telah diproses ke GUI
     frame_processed = pyqtSignal(np.ndarray)
 
     def __init__(self, video_source="rtsp", rois=None, reference_filename=None, ip_camera=None):
         super().__init__()
-        # Tetapkan ukuran frame yang diinginkan
         self.target_width = 960
         self.target_height = 540
-
         self.video_source = video_source
-
-        # ROIs asli sebelum skala (didesain untuk 1920x1080)
         original_rois = rois
-        # Faktor skala akan dihitung setelah mengetahui ukuran asli frame
-        self.scale_x = 1.0
-        self.scale_y = 1.0
-
-        # Path folder untuk gambar referensi
         self.reference_folder = "D:/NWR/sources/AlFaruq/media/"
         self.reference_filename = reference_filename
         self.reference_path = os.path.join(self.reference_folder, self.reference_filename)
         self.reference_img = cv2.imread(self.reference_path)
         if self.reference_img is None:
             raise ValueError(f"Tidak dapat membaca gambar referensi dari {self.reference_path}")
-
-        # Buka sumber video
         if self.video_source == "rtsp":
             self.cap = cv2.VideoCapture(f"rtsp://admin:oracle2015@{ip_camera}:554/Streaming/Channels/1")
         else:
-            # Ganti dengan path ke video lokal Anda untuk pengujian
-            self.cap = cv2.VideoCapture("C:/path/to/local/video.mp4")  # Ubah sesuai path Anda
-
+            self.cap = cv2.VideoCapture("C:/path/to/local/video.mp4")
         if not self.cap.isOpened():
             raise ValueError("Tidak dapat membuka sumber video.")
 
@@ -52,18 +38,14 @@ class AnomalyDetection(QThread):
         if not ret:
             raise ValueError("Tidak dapat membaca frame dari sumber video.")
 
-        # Dapatkan ukuran asli frame
         self.frame_height, self.frame_width = frame.shape[:2]
-
-        # Hitung faktor skala berdasarkan ukuran target
         self.scale_x = self.target_width / self.frame_width
         self.scale_y = self.target_height / self.frame_height
 
-        # Ubah ukuran gambar referensi ke ukuran target
         self.reference_img = cv2.resize(self.reference_img, (self.target_width, self.target_height))
         self.cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
         self.reference_display = self.reference_img.copy()
-        # Skalakan ROIs berdasarkan faktor skala
+
         self.rois = [[(int(x * self.scale_x), int(y * self.scale_y)) for (x, y) in roi] for roi in original_rois]
 
         for roi in self.rois:
@@ -81,18 +63,24 @@ class AnomalyDetection(QThread):
             cropped_mask = self.create_polygon_mask((h, w), cropped_polygon)
             self.precomputed_masks.append(cropped_mask)
 
-        self.capture_queue = queue.Queue(maxsize=20)  # Meningkatkan ukuran queue
+        self.capture_queue = queue.Queue(maxsize=20)
         self.stop_event = threading.Event()
         self.frame_counter = 0
         self.frame_count = 0
         self.start_time = time.time()
-        self.lock = threading.Lock()  # Untuk sinkronisasi pembaruan referensi
+        self.lock = threading.Lock()
 
-        self.latest_frame = None  # Menyimpan frame terbaru yang diproses
-        self.latest_original_frame = None  # Menyimpan frame asli terbaru
+        self.latest_frame = None
+        self.latest_original_frame = None
+        self.sensitivity_threshold = 50
 
-        # Sensitivitas default
-        self.sensitivity_threshold = 50  # Nilai default, dapat diubah melalui slider
+        # Inisialisasi variabel untuk timer per ROI
+        self.num_rois = len(self.rois)
+        self.roi_active = [False] * self.num_rois
+        self.roi_pause = [False] * self.num_rois
+        self.roi_timer_start = [None] * self.num_rois
+        self.roi_pause_start = [None] * self.num_rois
+        self.roi_timer_offset = [0] * self.num_rois
 
     def create_polygon_mask(self, image_shape, polygon):
         mask = np.zeros(image_shape, dtype=np.uint8)
@@ -113,7 +101,6 @@ class AnomalyDetection(QThread):
             matcher = cv2.DescriptorMatcher_create(cv2.DESCRIPTOR_MATCHER_BRUTEFORCE_HAMMING)
             matches = matcher.match(descriptors_ref, descriptors_target, None)
             if len(matches) == 0:
-                print("Tidak ada kecocokan fitur ditemukan.")
                 return target_roi
 
             matches = sorted(matches, key=lambda x: x.distance)
@@ -130,22 +117,17 @@ class AnomalyDetection(QThread):
                 points_target[i, :] = keypoints_target[match.trainIdx].pt
 
             h, mask = cv2.findHomography(points_target, points_ref, cv2.RANSAC)
-
             if h is None:
-                print("Homografi tidak dapat dihitung.")
                 return target_roi
 
             height, width, channels = reference_roi.shape
             aligned_target = cv2.warpPerspective(target_roi, h, (width, height))
-
             return aligned_target
-        except Exception as e:
-            print(f"Error dalam align_images: {e}")
+        except:
             return target_roi
 
     def run(self):
         try:
-            # Mulai thread capture_frames
             self.capture_thread = threading.Thread(target=self.capture_frames)
             self.capture_thread.start()
             self.process_frames()
@@ -166,9 +148,7 @@ class AnomalyDetection(QThread):
                 if self.frame_counter % 2 != 0:
                     continue
 
-                # Ubah ukuran frame ke target size
                 frame_resized = cv2.resize(frame, (self.target_width, self.target_height))
-
                 try:
                     self.capture_queue.put(frame_resized, timeout=1)
                 except queue.Full:
@@ -186,21 +166,24 @@ class AnomalyDetection(QThread):
                     continue
 
                 output = frame.copy()
+                current_time = time.time()
 
                 with self.lock:
                     for idx, roi in enumerate(self.rois):
                         x, y, w, h = self.bounding_boxes[idx]
-                        cropped_polygon = self.cropped_polygons[idx]
                         mask = self.precomputed_masks[idx]
                         reference_cropped = cv2.bitwise_and(self.reference_img[y : y + h, x : x + w], self.reference_img[y : y + h, x : x + w], mask=mask)
                         target_cropped = cv2.bitwise_and(frame[y : y + h, x : x + w], frame[y : y + h, x : x + w], mask=mask)
                         if reference_cropped.size == 0 or target_cropped.size == 0:
+                            # Jika tidak bisa melakukan perbandingan, lewati ROI ini
+                            # Namun tetap update timer ke 0 jika tidak ada deteksi
+                            self.handle_roi_timer(idx, detection_found=False, current_time=current_time)
                             continue
 
                         aligned_target_cropped = self.align_images(reference_cropped, target_cropped)
                         if aligned_target_cropped is None:
+                            self.handle_roi_timer(idx, detection_found=False, current_time=current_time)
                             continue
-
                         try:
                             gray_ref_roi = cv2.cvtColor(reference_cropped, cv2.COLOR_BGR2GRAY)
                             gray_aligned_roi = cv2.cvtColor(aligned_target_cropped, cv2.COLOR_BGR2GRAY)
@@ -211,29 +194,104 @@ class AnomalyDetection(QThread):
                             thresh = cv2.dilate(thresh, kernel, iterations=2)
                             thresh = cv2.erode(thresh, kernel, iterations=1)
                             contours, _ = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+
+                            detection_found = False
                             for contour in contours:
                                 if cv2.contourArea(contour) > 100:
                                     (cx, cy, cw, ch) = cv2.boundingRect(contour)
                                     cv2.rectangle(output, (x + cx, y + cy), (x + cx + cw, y + cy + ch), (0, 0, 255), 2)
+                                    detection_found = True
+
+                            # Update timer berdasarkan apakah ada deteksi atau tidak
+                            self.handle_roi_timer(idx, detection_found=detection_found, current_time=current_time)
+
+                            # Tampilkan timer
+                            duration_str = self.get_roi_timer_str(idx, current_time)
+                            cv2.putText(output, duration_str, (x + 5, y + 20), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 0), 1)
+
                         except Exception as e:
                             print(f"Error dalam proses ROI {idx}: {e}")
+                            self.handle_roi_timer(idx, detection_found=False, current_time=current_time)
 
-                # Update FPS
                 self.frame_count += 1
                 if self.frame_count % 30 == 0:
                     elapsed_time = time.time() - self.start_time
                     fps = self.frame_count / elapsed_time
                     print(f"FPS: {fps:.2f}")
 
-                # Menyimpan frame terbaru untuk tampilan dan kalibrasi
                 with self.lock:
                     self.latest_frame = output.copy()
-                    self.latest_original_frame = frame.copy()  # Menyimpan frame asli
+                    self.latest_original_frame = frame.copy()
 
-                # Emit frame yang telah diproses ke GUI
                 self.frame_processed.emit(output)
         except Exception as e:
             print(f"Error dalam process_frames: {e}")
+
+    def handle_roi_timer(self, idx, detection_found, current_time):
+        # Jika ada deteksi
+        if detection_found:
+            if not self.roi_active[idx]:
+                # Jika sebelumnya tidak aktif
+                if self.roi_pause[idx]:
+                    # Sedang pause, cek apakah belum lewat 5 detik
+                    if current_time - self.roi_pause_start[idx] < 5:
+                        # Lanjutkan timer
+                        # Tambahkan jeda waktu pause ke offset
+                        paused_duration = current_time - self.roi_pause_start[idx]
+                        self.roi_timer_offset[idx] += paused_duration
+                    else:
+                        # Sudah lewat 5 detik, reset timer
+                        self.roi_timer_offset[idx] = 0
+                    self.roi_pause[idx] = False
+                    self.roi_pause_start[idx] = None
+                    self.roi_active[idx] = True
+                    if self.roi_timer_start[idx] is None:
+                        self.roi_timer_start[idx] = current_time
+                else:
+                    # Tidak pause, artinya deteksi baru
+                    self.roi_active[idx] = True
+                    self.roi_timer_offset[idx] = 0
+                    self.roi_timer_start[idx] = current_time
+            else:
+                # Sudah aktif, lanjut saja
+                pass
+        else:
+            # Tidak ada deteksi
+            if self.roi_active[idx]:
+                # Baru saja hilang deteksi
+                self.roi_active[idx] = False
+                self.roi_pause[idx] = True
+                self.roi_pause_start[idx] = current_time
+            else:
+                # Memang sedang tidak aktif
+                if self.roi_pause[idx]:
+                    # Sedang pause, cek apakah sudah lewat 5 detik
+                    if current_time - self.roi_pause_start[idx] >= 5:
+                        # Reset timer
+                        self.roi_timer_offset[idx] = 0
+                        self.roi_timer_start[idx] = None
+                        self.roi_pause[idx] = False
+                        self.roi_pause_start[idx] = None
+                # Jika tidak pause dan tidak aktif, timer memang 0 terus
+
+    def get_roi_timer_str(self, idx, current_time):
+        if self.roi_active[idx]:
+            # Timer berjalan
+            elapsed = (current_time - self.roi_timer_start[idx]) + self.roi_timer_offset[idx]
+        else:
+            if self.roi_pause[idx]:
+                # Sedang pause, tampilkan waktu terakhir
+                # yaitu offset saja (karena timer_start ke current_time terakhir sudah diakumulasikan)
+                elapsed = self.roi_timer_offset[idx]
+            else:
+                # Tidak aktif dan tidak pause
+                elapsed = 0
+
+        # Format hh:mm:ss
+        hours = int(elapsed // 3600)
+        minutes = int((elapsed % 3600) // 60)
+        seconds = int(elapsed % 60)
+        return f"{hours:02d}:{minutes:02d}:{seconds:02d}"
 
     def set_sensitivity_threshold(self, value):
         with self.lock:
@@ -243,14 +301,12 @@ class AnomalyDetection(QThread):
     def update_reference_image(self, new_reference_frame):
         try:
             with self.lock:
-                # Resize frame ke ukuran referensi (960x540)
                 resized_reference = cv2.resize(new_reference_frame, (self.target_width, self.target_height))
                 self.reference_img = resized_reference
                 self.reference_display = self.reference_img.copy()
                 for roi in self.rois:
                     cv2.polylines(self.reference_display, [np.array(roi, dtype=np.int32)], isClosed=True, color=(0, 255, 0), thickness=2)
 
-                # Recompute masks, bounding boxes, dan cropped polygons
                 self.precomputed_masks = []
                 self.bounding_boxes = []
                 self.cropped_polygons = []
@@ -499,7 +555,7 @@ if __name__ == "__main__":
         config = json.load(f)
 
     # Pilih office mana yang hendak digunakan, misalnya "OFFICE1"
-    office_key = "OFFICE2"
+    office_key = "OFFICE3"
 
     # Ambil nilai dari JSON
     reference_filename = config[office_key]["reference_filename"]
@@ -507,11 +563,7 @@ if __name__ == "__main__":
     rois = config[office_key]["rois"]
 
     # Inisialisasi MainWindow dengan nilai dari JSON
-    window = MainWindow(
-        rois=rois,
-        reference_filename=reference_filename,
-        ip_camera=ip_camera
-    )
+    window = MainWindow(rois=rois, reference_filename=reference_filename, ip_camera=ip_camera)
 
     window.show()
     sys.exit(app.exec())
