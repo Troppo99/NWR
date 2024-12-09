@@ -8,9 +8,7 @@ import threading
 import queue
 import math
 import numpy as np
-from shapely.geometry import Polygon, box
-from shapely.ops import unary_union
-from shapely.geometry import JOIN_STYLE
+from shapely.geometry import Polygon
 import pymysql
 from datetime import datetime
 
@@ -18,7 +16,7 @@ from datetime import datetime
 class BroomDetector:
     def __init__(
         self,
-        BROOM_CONFIDENCE_THRESHOLD=0.5,
+        BROOM_CONFIDENCE_THRESHOLD=0.0,  # set confidence 0
         rtsp_url=None,
         camera_name=None,
         window_size=(540, 360),
@@ -29,11 +27,8 @@ class BroomDetector:
         self.new_width, self.new_height = (960, 540)
         self.prev_frame_time = 0
         self.fps = 0
-        self.union_polygon = None
-        self.total_area = 0
         self.camera_name = camera_name
         self.borders, self.ip_camera = self.camera_config()
-        self.total_border_area = sum(border.area for border in self.borders) if self.borders else 0
         self.display = display
         if not self.display:
             print(f"B`{self.camera_name} : >>>Display is disabled!<<<")
@@ -62,34 +57,21 @@ class BroomDetector:
         self.stop_event = threading.Event()
         self.frame_thread = None
 
-        # Ganti model seperti yang diminta
-        # Tidak lagi menggunakan model best.pt, tetapi model last.pt seperti kode contoh
-        # Dan tidak menggunakan .plot()
+        # Gunakan model last.pt sesuai permintaan
         self.broom_model = YOLO("D:/NWR/run/kon/version1/weights/last.pt").to("cuda")
         self.broom_model.overrides["verbose"] = False
         print(f"Model Broom device: {next(self.broom_model.model.parameters()).device}")
 
-        self.last_overlap_time = time.time()
-        self.area_cleared = False
-        self.start_no_overlap_time_high = None
-        self.start_no_overlap_time_low = None
-        self.detection_paused = False
-        self.detection_resume_time = None
-        self.detection_pause_duration = 10
-        self.timestamp_start = None
-        self.start_high_coverage_time = None
-
-        # Timer violation
+        self.no_detection_duration = 3
         self.violation_start_time = None
         self.last_detected_time = None
-        self.no_detection_duration = 3
+        self.timestamp_start = None
 
     def camera_config(self):
         config = {
             "CUTTING8": {
-                # Contoh border (silakan sesuaikan sesuai kebutuhan)
-                # "borders": [[(626, 392), (405, 384), (408, 308), (423, 286), (642, 286), (632, 315), (633, 383)]],
                 "borders": [],
+                # "borders": [[(626, 392), (405, 384), (408, 308), (423, 286), (642, 286), (632, 315), (633, 383)]],
                 "ip": "10.5.0.95",
             },
         }
@@ -132,47 +114,89 @@ class BroomDetector:
             cap.release()
 
     def process_model(self, frame):
+        # conf=0 karena user minta confidence 0
         with torch.no_grad():
-            results = self.broom_model.predict(frame, conf=self.BROOM_CONFIDENCE_THRESHOLD)
+            results = self.broom_model.predict(frame, conf=0.5)
         return results
 
     def export_frame(self, results):
         boxes_info = []
         overlap_detected = False
-        # results adalah list of Results
         for result in results:
-            # result.boxes adalah Boxes
-            for box in result.boxes:
-                x1, y1, x2, y2 = map(int, box.xyxy[0])
-                conf = box.conf[0]
-                if conf > self.BROOM_CONFIDENCE_THRESHOLD:
-                    dp = 0.2
-                    x1_expanded = x1 - dp * (x2 - x1)
-                    y1_expanded = y1 - dp * (y2 - y1)
-                    x2_expanded = x2 + dp * (x2 - x1)
-                    y2_expanded = y2 + dp * (y2 - y1)
+            if result.masks is None:
+                continue
+            for poly_xy in result.masks.xy:
+                if len(poly_xy) < 3:
+                    # Jika titik polygon kurang dari 3, tidak dapat membentuk polygon yang valid
+                    continue
+                polygon = Polygon(poly_xy)
+                if polygon.is_empty or not polygon.is_valid:
+                    # Lewati polygon kosong atau tidak valid
+                    continue
+                poly_area = polygon.area
+                intersection_area_sum = 0.0
+                for border in self.borders:
+                    if polygon.intersects(border):
+                        inter = polygon.intersection(border)
+                        if not inter.is_empty:
+                            intersection_area_sum += inter.area
+                inside = False
+                if intersection_area_sum > 0.5 * poly_area:
+                    inside = True
+                    overlap_detected = True
 
-                    bbox_polygon = self.box_to_polygon(x1_expanded, y1_expanded, x2_expanded, y2_expanded)
-                    bbox_area = bbox_polygon.area
-                    intersection_area_sum = 0.0
-                    for border in self.borders:
-                        if bbox_polygon.intersects(border):
-                            intersection = bbox_polygon.intersection(border)
-                            if not intersection.is_empty:
-                                intersection_area_sum += intersection.area
-
-                    inside = False
-                    if intersection_area_sum > 0.5 * bbox_area:
-                        inside = True
-                        overlap_detected = True
-
-                    w = int(x2 - x1)
-                    h = int(y2 - y1)
-                    boxes_info.append((x1, y1, w, h, inside))
+                # Pastikan polygon tidak kosong sebelum mengambil centroid
+                if not polygon.is_empty:
+                    c = polygon.centroid
+                    boxes_info.append((poly_xy, inside, (c.x, c.y)))
         return boxes_info, overlap_detected
 
-    def update_union_polygon(self, new_polygons):
-        pass
+
+    def process_frame(self, frame, current_time):
+        frame_resized = cv2.resize(frame, (self.new_width, self.new_height))
+        results = self.process_model(frame_resized)
+        boxes_info, overlap_detected = self.export_frame(results)
+
+        # Cek violation timing
+        any_inside = any(bi[1] for bi in boxes_info)
+
+        if any_inside:
+            self.last_detected_time = current_time
+            if self.violation_start_time is None:
+                self.violation_start_time = current_time
+        else:
+            # Tidak ada polygon inside
+            if self.last_detected_time is not None:
+                if (current_time - self.last_detected_time) > self.no_detection_duration:
+                    self.violation_start_time = None
+                    self.last_detected_time = None
+
+        if overlap_detected and self.timestamp_start is None:
+            self.timestamp_start = datetime.now()
+
+        if self.display:
+            self.draw_borders(frame_resized)
+            # Gambar polygon
+            for poly_xy, inside, (cx, cy) in boxes_info:
+                pts = np.array(poly_xy, np.int32).reshape((-1, 1, 2))
+                if inside:
+                    # Violation
+                    cv2.fillPoly(frame_resized, [pts], (0, 70, 255))
+                    # Hitung waktu violation
+                    if self.violation_start_time is not None:
+                        elapsed = current_time - self.violation_start_time
+                        hh = int(elapsed // 3600)
+                        mm = int((elapsed % 3600) // 60)
+                        ss = int(elapsed % 60)
+                        timer_str = f"{hh:02}:{mm:02}:{ss:02}"
+                        cvzone.putTextRect(frame_resized, timer_str, (int(cx), int(cy) - 40), scale=1, thickness=2, offset=5, colorR=(0, 70, 255), colorT=(255, 255, 255))
+                    cvzone.putTextRect(frame_resized, "Violation!", (int(cx), int(cy) - 10), scale=1, thickness=2, offset=5, colorR=(0, 70, 255), colorT=(255, 255, 255))
+                else:
+                    # Warning
+                    cv2.fillPoly(frame_resized, [pts], (0, 255, 255))
+                    cvzone.putTextRect(frame_resized, "Warning!", (int(cx), int(cy) - 10), scale=1, thickness=2, offset=5, colorR=(0, 255, 255), colorT=(0, 0, 0))
+
+        return frame_resized, overlap_detected
 
     def draw_borders(self, frame):
         if not self.borders:
@@ -184,65 +208,13 @@ class BroomDetector:
             pts = pts.reshape((-1, 1, 2))
             cv2.polylines(frame, [pts], isClosed=True, color=(0, 255, 255), thickness=2)
 
-    def process_frame(self, frame, current_time):
-        frame_resized = cv2.resize(frame, (self.new_width, self.new_height))
-        if self.detection_paused:
-            if current_time >= self.detection_resume_time:
-                self.detection_paused = False
-                print(f"B`{self.camera_name} : Resuming detection after {self.detection_pause_duration}-second pause.")
-            else:
-                self.draw_borders(frame_resized)
-                return frame_resized, False
-        results = self.process_model(frame_resized)
-        boxes_info, overlap_detected = self.export_frame(results)
-
-        # Cek violation timing
-        any_inside = any(bi[-1] for bi in boxes_info)
-
-        if any_inside:
-            self.last_detected_time = current_time
-            if self.violation_start_time is None:
-                self.violation_start_time = current_time
-        else:
-            if self.last_detected_time is not None:
-                if (current_time - self.last_detected_time) > self.no_detection_duration:
-                    self.violation_start_time = None
-                    self.last_detected_time = None
-
-        if overlap_detected and self.timestamp_start is None:
-            self.timestamp_start = datetime.now()
-
-        if self.display:
-            self.draw_borders(frame_resized)
-            for x, y, w, h, inside in boxes_info:
-                if inside:
-                    cvzone.cornerRect(frame_resized, (x, y, w, h), l=10, t=2, colorR=(0, 70, 255), colorC=(255, 255, 255))
-                    if self.violation_start_time is not None:
-                        elapsed = current_time - self.violation_start_time
-                        hh = int(elapsed // 3600)
-                        mm = int((elapsed % 3600) // 60)
-                        ss = int(elapsed % 60)
-                        timer_str = f"{hh:02}:{mm:02}:{ss:02}"
-                        cvzone.putTextRect(frame_resized, timer_str, (x, y - 40), scale=1, thickness=2, offset=5, colorR=(0, 70, 255), colorT=(255, 255, 255))
-                    cvzone.putTextRect(frame_resized, "Violation!", (x, y - 10), scale=1, thickness=2, offset=5, colorR=(0, 70, 255), colorT=(255, 255, 255))
-                else:
-                    cvzone.cornerRect(frame_resized, (x, y, w, h), l=10, t=2, colorR=(0, 255, 255), colorC=(255, 255, 255))
-                    cvzone.putTextRect(frame_resized, "Warning!", (x, y - 10), scale=1, thickness=2, offset=5, colorR=(0, 255, 255), colorT=(0, 0, 0))
-
-        return frame_resized, overlap_detected
-
     def box_to_polygon(self, x1, y1, x2, y2):
+        from shapely.geometry import box
+
         return box(x1, y1, x2, y2)
 
-    def polygon_to_bbox(self, polygon):
-        minx, miny, maxx, maxy = polygon.bounds
-        return int(minx), int(miny), int(maxx - minx), int(maxy - miny)
-
     def check_conditions(self, percentage, overlap_detected, current_time, frame_resized):
-        if self.detection_paused:
-            if current_time >= self.detection_resume_time:
-                self.detection_paused = False
-                print(f"B`{self.camera_name} : Resuming detection after {self.detection_pause_duration}-second pause.")
+        pass
 
     def capture_and_send(self, frame_resized, percentage, current_time):
         cvzone.putTextRect(frame_resized, f"Overlap: {percentage:.2f}%", (10, 50), scale=1, thickness=2, offset=5)
