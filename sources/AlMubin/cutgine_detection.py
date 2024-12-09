@@ -121,8 +121,8 @@ def main():
     app = QApplication(sys.argv)
 
     # Path ke video lokal dan model YOLO
-    video_path = "D:/SBHNL/Videos/AHMDL/EDIT/MOT.mp4"
-    model_path = "D:/NWR/run/cutting_engine/version1/weights/best.pt"
+    video_path = "videos/test/cutgine.mp4"
+    model_path = "run/cutting_engine/version1/weights/best.pt"
 
     window = MainWindow(video_path, model_path)
     window.show()
