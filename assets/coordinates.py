@@ -2,7 +2,7 @@ import cv2
 import math
 
 # RTSP stream URL
-video_path = "rtsp://admin:oracle2015@10.5.0.170:554/Streaming/Channels/1"
+video_path = "rtsp://admin:oracle2015@10.5.0.95:554/Streaming/Channels/1"
 
 # Initialize variables for storing keypoints
 chains = []  # List to store all chains of keypoints
