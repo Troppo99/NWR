@@ -1,7 +1,7 @@
 from ultralytics import YOLO
 
 if __name__ == "__main__":
-    model = YOLO("models/yolo11l-seg.pt")
+    model = YOLO(r"D:\NWR\run\kon\version1\weights\last.pt")
 
     model.train(
         task="segment",
@@ -12,6 +12,6 @@ if __name__ == "__main__":
         name="version1",
         device="cuda",
         batch=16,
-        resume=False,
+        resume=True,
         amp=True,
     )
