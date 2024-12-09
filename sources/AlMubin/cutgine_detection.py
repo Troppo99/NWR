@@ -125,7 +125,6 @@ class BroomDetector:
         return results
 
     def export_frame(self, results):
-        # Mengembalikan list box dengan flag inside/outside
         boxes_info = []
         overlap_detected = False
         for result in results:
@@ -139,24 +138,25 @@ class BroomDetector:
                 conf = box.conf[0]
                 if conf > self.BROOM_CONFIDENCE_THRESHOLD:
                     bbox_polygon = self.box_to_polygon(x1_expanded, y1_expanded, x2_expanded, y2_expanded)
-                    inside = False
+                    bbox_area = bbox_polygon.area
+                    intersection_area_sum = 0.0
                     for border in self.borders:
                         if bbox_polygon.intersects(border):
                             intersection = bbox_polygon.intersection(border)
                             if not intersection.is_empty:
-                                inside = True
-                                overlap_detected = True
-                                break
+                                intersection_area_sum += intersection.area
+                    inside = False
+                    if intersection_area_sum > 0.5 * bbox_area:
+                        inside = True
+                        overlap_detected = True
+
                     w = int(x2 - x1)
                     h = int(y2 - y1)
                     boxes_info.append((x1, y1, w, h, inside))
         return boxes_info, overlap_detected
 
     def update_union_polygon(self, new_polygons):
-        # Sudah tidak dipakai untuk segment hijau, tapi tetap dipertahankan fungsinya
-        # jika diperlukan di kemudian hari.
-        # Disini kita tidak akan membentuk polygon union lagi,
-        # karena user meminta untuk menghapus segment hijau.
+        # Tidak digunakan lagi
         pass
 
     def draw_borders(self, frame):
@@ -181,21 +181,19 @@ class BroomDetector:
         results = self.process_model(frame_resized)
         boxes_info, overlap_detected = self.export_frame(results)
 
-        # Jika ada overlap dan belum tercatat waktu mulai, catat
         if overlap_detected and self.timestamp_start is None:
             self.timestamp_start = datetime.now()
 
-        # Labeling setiap box
         if self.display:
             self.draw_borders(frame_resized)
             for x, y, w, h, inside in boxes_info:
                 if inside:
-                    # Inside border => "Violation!"
-                    cvzone.cornerRect(frame_resized, (x, y, w, h), l=10, t=2, colorR=(0, 255, 255), colorC=(255, 255, 255))
-                    cvzone.putTextRect(frame_resized, "Violation!", (x, y - 10), scale=1, thickness=2, offset=5, colorR=(20, 10, 255), colorT=(255, 255, 255))
-                else:
-                    # Outside border => "Warning!"
+                    # Inside (overlap > 50%) => "Violation!"
                     cvzone.cornerRect(frame_resized, (x, y, w, h), l=10, t=2, colorR=(0, 0, 128), colorC=(255, 255, 255))
+                    cvzone.putTextRect(frame_resized, "Violation!", (x, y - 10), scale=1, thickness=2, offset=5, colorR=(0, 0, 128), colorT=(255, 255, 255))
+                else:
+                    # Outside => "Warning!"
+                    cvzone.cornerRect(frame_resized, (x, y, w, h), l=10, t=2, colorR=(0, 255, 255), colorC=(255, 255, 255))
                     cvzone.putTextRect(frame_resized, "Warning!", (x, y - 10), scale=1, thickness=2, offset=5, colorR=(0, 255, 255), colorT=(0, 0, 0))
 
         return frame_resized, overlap_detected
@@ -208,59 +206,8 @@ class BroomDetector:
         return int(minx), int(miny), int(maxx - minx), int(maxy - miny)
 
     def check_conditions(self, percentage, overlap_detected, current_time, frame_resized):
-        if percentage >= 90:
-            if self.start_high_coverage_time is None:
-                self.start_high_coverage_time = current_time
-            if current_time - self.start_high_coverage_time >= 5:
-                self.union_polygon = None
-                self.total_area = 0
-                print(f"B`{self.camera_name} : Percentage >= 90% confirmed after 5 seconds.")
-                self.capture_and_send(frame_resized, percentage, current_time)
-                self.timestamp_start = None
-                self.detection_paused = True
-                self.detection_resume_time = current_time + self.detection_pause_duration
-                self.start_no_overlap_time_high = None
-                self.start_no_overlap_time_low = None
-                self.start_high_coverage_time = None
-                return
-        else:
-            self.start_high_coverage_time = None
-
-        if 50 <= percentage < 90:
-            if not overlap_detected:
-                if self.start_no_overlap_time_low is None:
-                    self.start_no_overlap_time_low = current_time
-                elif current_time - self.start_no_overlap_time_low >= 60:
-                    self.union_polygon = None
-                    self.total_area = 0
-                    print(f"B`{self.camera_name} : Percentage >= 50%")
-                    self.capture_and_send(frame_resized, percentage, current_time)
-                    self.start_no_overlap_time_low = None
-            else:
-                self.start_no_overlap_time_low = None
-        elif 5 <= percentage < 50:
-            if not overlap_detected:
-                if self.start_no_overlap_time_low is None:
-                    self.start_no_overlap_time_low = current_time
-                elif current_time - self.start_no_overlap_time_low >= 30:
-                    self.union_polygon = None
-                    self.total_area = 0
-                    print(f"B`{self.camera_name} : Percentage >= 5%")
-                    self.start_no_overlap_time_low = None
-            else:
-                self.start_no_overlap_time_low = None
-        else:
-            if not overlap_detected:
-                if self.start_no_overlap_time_low is None:
-                    self.start_no_overlap_time_low = current_time
-                elif current_time - self.start_no_overlap_time_low >= 5:
-                    self.union_polygon = None
-                    self.total_area = 0
-                    print(f"B`{self.camera_name} : Percentage < 5%")
-                    self.start_no_overlap_time_low = None
-            else:
-                self.start_no_overlap_time_low = None
-
+        # Tidak lagi menggunakan union polygon atau percentage coverage
+        # Namun kode dibiarkan jika diperlukan
         if self.detection_paused:
             if current_time >= self.detection_resume_time:
                 self.detection_paused = False
@@ -344,7 +291,7 @@ class BroomDetector:
                 self.fps = 1 / time_diff if time_diff > 0 else 0
                 self.prev_frame_time = current_time
                 frame_resized, overlap_detected = self.process_frame(frame, current_time)
-                percentage = 0  # Tidak diperlukan lagi polygon union, set 0 atau jika perlu
+                percentage = 0
                 if self.display:
                     cvzone.putTextRect(frame_resized, f"FPS: {int(self.fps)}", (10, 75), scale=1, thickness=2, offset=5)
                 self.check_conditions(percentage, overlap_detected, current_time, frame_resized)
