@@ -74,10 +74,16 @@ class BroomDetector:
         self.timestamp_start = None
         self.start_high_coverage_time = None
 
+        # Untuk perhitungan waktu violation
+        self.violation_start_time = None
+        self.last_detected_time = None
+        self.no_detection_duration = 3
+
     def camera_config(self):
         config = {
             "CUTTING8": {
-                "borders": [[(46, 256), (136, 224), (581, 295), (1109, 398), (1275, 436), (1275, 719), (989, 719), (682, 613), (437, 499), (238, 385), (111, 306)]],
+                "borders": [[(626, 392), (405, 384), (408, 308), (423, 286), (642, 286), (632, 315), (633, 383)]],
+                # "borders": [[(46, 256), (136, 224), (581, 295), (1109, 398), (1275, 436), (1275, 719), (989, 719), (682, 613), (437, 499), (238, 385), (111, 306)]],
                 "ip": "10.5.0.95",
             },
         }
@@ -156,7 +162,6 @@ class BroomDetector:
         return boxes_info, overlap_detected
 
     def update_union_polygon(self, new_polygons):
-        # Tidak digunakan lagi
         pass
 
     def draw_borders(self, frame):
@@ -181,6 +186,25 @@ class BroomDetector:
         results = self.process_model(frame_resized)
         boxes_info, overlap_detected = self.export_frame(results)
 
+        # Cek violation timing
+        # Jika ada violation (inside == True untuk setidaknya satu box)
+        any_inside = any(bi[-1] for bi in boxes_info)
+
+        if any_inside:
+            # Update last_detected_time
+            self.last_detected_time = current_time
+            # Jika belum ada violation_start_time, inisialisasi
+            if self.violation_start_time is None:
+                self.violation_start_time = current_time
+        else:
+            # Tidak ada inside
+            if self.last_detected_time is not None:
+                # Cek berapa lama sejak terakhir terdeteksi
+                if (current_time - self.last_detected_time) > self.no_detection_duration:
+                    # Reset violation_start_time jika tidak terdeteksi > 5 detik
+                    self.violation_start_time = None
+                    self.last_detected_time = None
+
         if overlap_detected and self.timestamp_start is None:
             self.timestamp_start = datetime.now()
 
@@ -188,11 +212,20 @@ class BroomDetector:
             self.draw_borders(frame_resized)
             for x, y, w, h, inside in boxes_info:
                 if inside:
-                    # Inside (overlap > 50%) => "Violation!"
+                    # Violation
                     cvzone.cornerRect(frame_resized, (x, y, w, h), l=10, t=2, colorR=(0, 70, 255), colorC=(255, 255, 255))
+                    # Hitung waktu violation jika ada violation_start_time
+                    if self.violation_start_time is not None:
+                        elapsed = current_time - self.violation_start_time
+                        hh = int(elapsed // 3600)
+                        mm = int((elapsed % 3600) // 60)
+                        ss = int(elapsed % 60)
+                        timer_str = f"{hh:02}:{mm:02}:{ss:02}"
+                        # Tampilkan timer di atas tulisan Violation!
+                        cvzone.putTextRect(frame_resized, timer_str, (x, y - 40), scale=1, thickness=2, offset=5, colorR=(0, 70, 255), colorT=(255, 255, 255))
                     cvzone.putTextRect(frame_resized, "Violation!", (x, y - 10), scale=1, thickness=2, offset=5, colorR=(0, 70, 255), colorT=(255, 255, 255))
                 else:
-                    # Outside => "Warning!"
+                    # Warning
                     cvzone.cornerRect(frame_resized, (x, y, w, h), l=10, t=2, colorR=(0, 255, 255), colorC=(255, 255, 255))
                     cvzone.putTextRect(frame_resized, "Warning!", (x, y - 10), scale=1, thickness=2, offset=5, colorR=(0, 255, 255), colorT=(0, 0, 0))
 
@@ -206,8 +239,6 @@ class BroomDetector:
         return int(minx), int(miny), int(maxx - minx), int(maxy - miny)
 
     def check_conditions(self, percentage, overlap_detected, current_time, frame_resized):
-        # Tidak lagi menggunakan union polygon atau percentage coverage
-        # Namun kode dibiarkan jika diperlukan
         if self.detection_paused:
             if current_time >= self.detection_resume_time:
                 self.detection_paused = False
