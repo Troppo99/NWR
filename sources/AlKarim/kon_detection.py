@@ -71,7 +71,7 @@ class BroomDetector:
         config = {
             "CUTTING8": {
                 "borders": [],
-                # "borders": [[(626, 392), (405, 384), (408, 308), (423, 286), (642, 286), (632, 315), (633, 383)]],
+                "borders": [[(46, 256), (136, 224), (581, 295), (1109, 398), (1275, 436), (1275, 719), (989, 719), (682, 613), (437, 499), (238, 385), (111, 306)]],
                 "ip": "10.5.0.95",
             },
         }
@@ -151,21 +151,17 @@ class BroomDetector:
                     boxes_info.append((poly_xy, inside, (c.x, c.y)))
         return boxes_info, overlap_detected
 
-
     def process_frame(self, frame, current_time):
         frame_resized = cv2.resize(frame, (self.new_width, self.new_height))
         results = self.process_model(frame_resized)
         boxes_info, overlap_detected = self.export_frame(results)
 
-        # Cek violation timing
         any_inside = any(bi[1] for bi in boxes_info)
-
         if any_inside:
             self.last_detected_time = current_time
             if self.violation_start_time is None:
                 self.violation_start_time = current_time
         else:
-            # Tidak ada polygon inside
             if self.last_detected_time is not None:
                 if (current_time - self.last_detected_time) > self.no_detection_duration:
                     self.violation_start_time = None
@@ -176,12 +172,26 @@ class BroomDetector:
 
         if self.display:
             self.draw_borders(frame_resized)
-            # Gambar polygon
+
+            # Buat overlay untuk menggambar polygon dengan warna solid
+            overlay = frame_resized.copy()
+
             for poly_xy, inside, (cx, cy) in boxes_info:
                 pts = np.array(poly_xy, np.int32).reshape((-1, 1, 2))
                 if inside:
                     # Violation
-                    cv2.fillPoly(frame_resized, [pts], (0, 70, 255))
+                    cv2.fillPoly(overlay, [pts], (0, 70, 255))
+                else:
+                    # Warning
+                    cv2.fillPoly(overlay, [pts], (0, 255, 255))
+
+            # Campurkan overlay dengan frame_resized dengan transparansi 50%
+            alpha = 0.5
+            cv2.addWeighted(overlay, alpha, frame_resized, 1 - alpha, 0, frame_resized)
+
+            # Setelah transparansi diaplikasikan, baru tulis teks di atasnya
+            for poly_xy, inside, (cx, cy) in boxes_info:
+                if inside:
                     # Hitung waktu violation
                     if self.violation_start_time is not None:
                         elapsed = current_time - self.violation_start_time
@@ -192,8 +202,6 @@ class BroomDetector:
                         cvzone.putTextRect(frame_resized, timer_str, (int(cx), int(cy) - 40), scale=1, thickness=2, offset=5, colorR=(0, 70, 255), colorT=(255, 255, 255))
                     cvzone.putTextRect(frame_resized, "Violation!", (int(cx), int(cy) - 10), scale=1, thickness=2, offset=5, colorR=(0, 70, 255), colorT=(255, 255, 255))
                 else:
-                    # Warning
-                    cv2.fillPoly(frame_resized, [pts], (0, 255, 255))
                     cvzone.putTextRect(frame_resized, "Warning!", (int(cx), int(cy) - 10), scale=1, thickness=2, offset=5, colorR=(0, 255, 255), colorT=(0, 0, 0))
 
         return frame_resized, overlap_detected
