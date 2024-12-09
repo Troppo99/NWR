@@ -1,5 +1,5 @@
-from AlGhaffar.ALGFR import run_carpal
-from AlKabir.ALKBR import run_broom
+from sources.AlGhaffar.carpal_detection import run_carpal
+from sources.AlKabir.broom_detection import run_broom
 import multiprocessing
 
 
