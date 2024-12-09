@@ -189,8 +189,8 @@ class BroomDetector:
             for x, y, w, h, inside in boxes_info:
                 if inside:
                     # Inside (overlap > 50%) => "Violation!"
-                    cvzone.cornerRect(frame_resized, (x, y, w, h), l=10, t=2, colorR=(0, 0, 128), colorC=(255, 255, 255))
-                    cvzone.putTextRect(frame_resized, "Violation!", (x, y - 10), scale=1, thickness=2, offset=5, colorR=(0, 0, 128), colorT=(255, 255, 255))
+                    cvzone.cornerRect(frame_resized, (x, y, w, h), l=10, t=2, colorR=(0, 70, 255), colorC=(255, 255, 255))
+                    cvzone.putTextRect(frame_resized, "Violation!", (x, y - 10), scale=1, thickness=2, offset=5, colorR=(0, 70, 255), colorT=(255, 255, 255))
                 else:
                     # Outside => "Warning!"
                     cvzone.cornerRect(frame_resized, (x, y, w, h), l=10, t=2, colorR=(0, 255, 255), colorC=(255, 255, 255))
@@ -358,4 +358,5 @@ if __name__ == "__main__":
         camera_name="CUTTING8",
         rtsp_url="videos/test/cutgine.mp4",
         display=True,
+        window_size=(640, 480),
     )
