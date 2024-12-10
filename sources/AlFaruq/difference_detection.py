@@ -12,6 +12,32 @@ from PyQt6.QtGui import QImage, QPixmap
 from PyQt6.QtCore import Qt, QThread, pyqtSignal, pyqtSlot
 
 
+def place_text_in_roi(output, text, x, y, w, h, frame_width, frame_height):
+    font = cv2.FONT_HERSHEY_SIMPLEX
+    font_scale = 0.5
+    thickness = 1
+
+    (text_width, text_height), _ = cv2.getTextSize(text, font, font_scale, thickness)
+
+    candidates = [(x + 5, y + 20), (x + w - text_width - 5, y + 20), (x + 5, y + h - 5), (x + w - text_width - 5, y + h - 5)]  # kiri atas  # kanan atas  # kiri bawah  # kanan bawah
+
+    for tx, ty in candidates:
+        if tx < 0:
+            continue
+        if ty - text_height < 0:
+            continue
+        if (tx + text_width) > frame_width:
+            continue
+        if ty > frame_height:
+            continue
+
+        return (tx, ty)
+
+    tx = max(0, min(x + 5, frame_width - text_width - 5))
+    ty = max(text_height + 5, min(y + 20, frame_height - 5))
+    return (tx, ty)
+
+
 class AnomalyDetection(QThread):
     frame_processed = pyqtSignal(np.ndarray)
 
@@ -207,7 +233,8 @@ class AnomalyDetection(QThread):
 
                             # Tampilkan timer
                             duration_str = self.get_roi_timer_str(idx, current_time)
-                            cv2.putText(output, duration_str, (x + 5, y + 20), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 0), 1)
+                            tx, ty = place_text_in_roi(output, duration_str, x, y, w, h, self.target_width, self.target_height)
+                            cv2.putText(output, duration_str, (tx, ty), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 0), 1)
 
                         except Exception as e:
                             print(f"Error dalam proses ROI {idx}: {e}")
