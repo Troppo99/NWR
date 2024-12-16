@@ -1,5 +1,4 @@
 import os
-os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
 import cv2
 import cvzone
 from ultralytics import YOLO
@@ -20,10 +19,10 @@ def export_frame(frame):
     return frame, boxes_info
 
 
-n=1
-videos = ["rtsp://admin:oracle2015@10.5.0.110:554/Streaming/Channels/1", f"D:/NWR/videos/test/broom_test_000{n}.mp4"]
-cap = cv2.VideoCapture(videos[0])
-model = YOLO("D:/NWR/run/g2_one/version_detect/weights/best.pt")
+n = 1
+videos = ["rtsp://admin:oracle2015@10.5.0.110:554/Streaming/Channels/1", f"videos/test/kon.mp4"]
+cap = cv2.VideoCapture(videos[1])
+model = YOLO("D:/best.pt")
 model.overrides["verbose"] = False
 
 while True:
@@ -31,7 +30,7 @@ while True:
     if not ret:
         n += 1
         # videos = ["rtsp://admin:oracle2015@10.5.0.110:554/Streaming/Channels/1", f"D:/NWR/videos/test/broom_test_000{n}.mp4"]
-        cap = cv2.VideoCapture(videos[0])
+        cap = cv2.VideoCapture(videos[1])
         time.sleep(0.1)
         try:
             ret, frame = cap.read()
