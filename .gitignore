@@ -20,12 +20,4 @@ branch/*
 
 
 
-link/.venv/*
-link/.vscode/*
-link/static/data/*
-link/static/models/*
-link/static/images/*
-link/static/videos/*
-link/*.pyc
-link/.draft.py
-link/*/.all.py
+YOLO11/*
