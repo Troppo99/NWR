@@ -58,7 +58,7 @@ class BroomDetector:
         self.frame_thread = None
 
         # Gunakan model last.pt sesuai permintaan
-        self.broom_model = YOLO("D:/NWR/run/kon2/version1/weights/last.pt").to("cuda")
+        self.broom_model = YOLO("D:/NWR/run/kon/version2/weights/best.pt").to("cuda")
         self.broom_model.overrides["verbose"] = False
         print(f"Model Broom device: {next(self.broom_model.model.parameters()).device}")
 
@@ -73,7 +73,7 @@ class BroomDetector:
                 "borders": [],
                 # "borders": [[(46, 256), (136, 224), (581, 295), (1109, 398), (1275, 436), (1275, 719), (989, 719), (682, 613), (437, 499), (238, 385), (111, 306)]],
                 # "borders": [[(26, 117), (136, 82), (480, 154), (763, 235), (1052, 346), (1278, 450), (1277, 716), (796, 715), (480, 529), (255, 346), (320, 329), (150, 212), (26, 117)]],
-                "ip": "10.5.0.95",
+                "ip": "172.16.0.137",
             },
         }
         if self.camera_name not in config:
@@ -368,7 +368,7 @@ def run_broom(camera_name, window_size=(320, 240), rtsp_url=None, display=True):
 if __name__ == "__main__":
     run_broom(
         camera_name="CUTTING8",
-        rtsp_url=r"C:\Users\Troppo\Downloads\1203.mp4",
+        # rtsp_url=r"C:\Users\Troppo\Downloads\1203.mp4",
         display=True,
         window_size=(640, 480),
     )
