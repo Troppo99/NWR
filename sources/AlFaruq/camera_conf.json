@@ -1,7 +1,7 @@
 {
     "OFFICE1": {
         "reference_filename": "office1/room0.jpg",
-        "ip_camera": "10.5.0.170",
+        "ip_camera": "172.16.0.34",
         "rois": [
             [
                 [
@@ -87,7 +87,7 @@
     },
     "OFFICE2": {
         "reference_filename": "office2/room0.jpg",
-        "ip_camera": "10.5.0.182",
+        "ip_camera": "10.5.0.100",
         "rois": [
             [
                 [
@@ -189,7 +189,7 @@
     },
     "OFFICE3": {
         "reference_filename": "office3/room0.jpg",
-        "ip_camera": "10.5.0.161",
+        "ip_camera": "10.5.0.42",
         "rois": [
             [
                 [
