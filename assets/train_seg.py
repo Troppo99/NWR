@@ -5,11 +5,11 @@ if __name__ == "__main__":
 
     model.train(
         task="segment",
-        data="D:/NWR/datasets/KON2.v1i.yolov11/data.yaml",
+        data="D:/NWR/datasets/contop_united/data.yaml",
         epochs=100,
         imgsz=640,
-        project="run/kon2",
-        name="version1",
+        project="run/contop",
+        name="version2",
         device="cuda",
         batch=16,
         resume=False,

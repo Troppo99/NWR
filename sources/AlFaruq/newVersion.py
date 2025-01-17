@@ -341,7 +341,7 @@ def main():
     config_path = "sources/AlFaruq/camera_conf.json"
     with open(config_path, "r") as f:
         config = json.load(f)
-    office_key = "OFFICE1"
+    office_key = "CUTTING1"
     reference_filename = config[office_key]["reference_filename"]
     ip_camera = config[office_key]["ip_camera"]
     rois = config[office_key]["rois"]
